@@ -58,6 +58,11 @@ export default function ProductCard({ product, isSaved, onToggleSave, highlight 
         )}
 
         <div className="card-badges">
+          {product.condition && (
+            <span className="badge badge-condition">
+              {product.condition === "used" ? "Used" : "Refurbished"}
+            </span>
+          )}
           {highlight && (
             <span className="badge badge-accent">
               <Icon name="tag" size={12} />

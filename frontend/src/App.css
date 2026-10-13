@@ -200,6 +200,12 @@ main {
   background: #6b5cf6;
 }
 
+.badge-condition {
+  border: 1px solid rgba(180, 83, 9, 0.2);
+  background: #fef3c7;
+  color: #92400e;
+}
+
 .badge-accent {
   background: var(--primary);
   color: var(--on-primary);

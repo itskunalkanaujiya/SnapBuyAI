@@ -86,6 +86,20 @@ def test_shopping_product_fields():
     assert product["visual_similarity_score"] is None
 
 
+@pytest.mark.parametrize(
+    "item, condition",
+    [
+        ({"title": "Refurbished Apple iPhone 15 Yellow by Cashify"}, "refurbished"),
+        ({"title": "Apple iPhone 15 128GB Blue Fair - Renewed"}, "refurbished"),
+        ({"title": "Used Apple iPhone 15 5G 128GB Black"}, "used"),
+        ({"title": "Apple iPhone 15", "second_hand_condition": "Pre-owned"}, "used"),
+        ({"title": "Apple iPhone 15 (128 GB) - Black"}, None),
+    ],
+)
+def test_item_condition(item, condition):
+    assert t.item_condition(item) == condition
+
+
 def test_old_price_ignored_unless_higher():
     item = {"title": "x", "price": "₹500", "extracted_price": 500, "extracted_old_price": 400,
             "product_link": "https://www.google.com/x"}

@@ -69,6 +69,9 @@ ACCESSORY_PATTERN = re.compile(
 )
 BUNDLE_PATTERN = re.compile(r"\b(set|combo|kit|pack of|bundle)\b", re.IGNORECASE)
 
+USED_PATTERN = re.compile(r"\b(used|pre-?owned|second[- ]hand)\b", re.IGNORECASE)
+REFURBISHED_PATTERN = re.compile(r"\b(refurbished|renewed|refurb|open[- ]box)\b", re.IGNORECASE)
+
 # Cross-border resellers that list imported stock at several times the
 # local price.
 IMPORT_RESELLERS = {
@@ -189,6 +192,17 @@ def query_overlap(title, query):
     return relevance(title, query)
 
 
+def item_condition(item):
+    """"refurbished", "used" or None (new), from Google's field or the title."""
+    reported = (item.get("second_hand_condition") or "").lower()
+    title = item.get("title") or ""
+    if "refurb" in reported or REFURBISHED_PATTERN.search(title):
+        return "refurbished"
+    if reported or USED_PATTERN.search(title):
+        return "used"
+    return None
+
+
 def is_import_reseller(product):
     store = f"{product.get('marketplace', '')} {get_domain(product.get('product_url'))}".lower()
     return any(name in store for name in IMPORT_RESELLERS)
@@ -270,6 +284,7 @@ def build_shopping_product(item, query):
         "source_icon": item.get("source_icon"),
         "rating": item.get("rating"),
         "reviews": item.get("reviews"),
+        "condition": item_condition(item),
         "visual_similarity_score": None,
         "text_relevance_score": relevance(item.get("title"), query),
         "match_type": "Google Shopping result",
