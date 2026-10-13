@@ -1237,12 +1237,13 @@ def select_sections(candidates, max_results, preview=False):
     }
 
 
-def run_google_lens(image_path: str | Path) -> list[dict]:
+def run_google_lens(image_path: str | Path, query: str | None = None) -> list[dict]:
     """
     Upload an image to SerpApi and return Google Lens shopping candidates,
     filtered and deduplicated, in Lens's own ranking order.
 
-    No search text is sent, so Lens identifies the product by itself.
+    Without a query, Lens identifies the product by itself. A query (for
+    example a brand and model the user typed) narrows the visual search.
     """
 
     api_key = os.getenv("SERPAPI_API_KEY")
@@ -1281,13 +1282,15 @@ def run_google_lens(image_path: str | Path) -> list[dict]:
         raise RuntimeError("Image upload returned no image_id.")
 
     # Search Google Lens.
-    visual_matches = fetch_visual_matches(api_key, image_id)
+    visual_matches = fetch_visual_matches(api_key, image_id, query=query)
 
     # Google Lens occasionally returns an empty response; retry once
     # without SerpApi's cache before giving up.
     if not visual_matches:
         print("Google Lens returned no visual matches; retrying once.")
-        visual_matches = fetch_visual_matches(api_key, image_id, no_cache=True)
+        visual_matches = fetch_visual_matches(
+            api_key, image_id, no_cache=True, query=query
+        )
 
     # Filter and deduplicate before scoring. The same listing can appear
     # under several URLs, so also match on title and seller.
@@ -1325,7 +1328,7 @@ def run_google_lens(image_path: str | Path) -> list[dict]:
     return candidates
 
 
-def fetch_visual_matches(api_key, image_id, no_cache=False):
+def fetch_visual_matches(api_key, image_id, no_cache=False, query=None):
     """Run one Google Lens search and return its raw visual matches."""
     params = {
         "engine": "google_lens",
@@ -1334,6 +1337,9 @@ def fetch_visual_matches(api_key, image_id, no_cache=False):
         "hl": "en",
         "api_key": api_key,
     }
+
+    if query:
+        params["q"] = query
 
     if no_cache:
         params["no_cache"] = "true"
@@ -1373,6 +1379,7 @@ def search_products_by_image(
     image_path: str | Path,
     max_results: int = 10,
     on_event=None,
+    query: str | None = None,
 ) -> dict:
     """
     Search Google Lens and return two separate sections.
@@ -1392,7 +1399,8 @@ def search_products_by_image(
             "online_search_query": str
         }
 
-    online_search_query is derived from the Lens results, not supplied.
+    online_search_query is derived from the Lens results unless a query is
+    given, in which case Lens is searched with it and it is used as-is.
     max_results is the maximum number of items in EACH section.
     """
 
@@ -1408,8 +1416,8 @@ def search_products_by_image(
             except Exception as exc:
                 print(f"Search event handler failed: {exc}")
 
-    candidates = run_google_lens(image_path)
-    query = derive_product_query(candidates)
+    candidates = run_google_lens(image_path, query=query)
+    query = query or derive_product_query(candidates)
     lens_done = time.monotonic()
 
     emit("identified", {"online_search_query": query})

@@ -141,6 +141,44 @@ export function ResultsLoading() {
   );
 }
 
+function RefineForm({ query, onSubmit, onCancel }) {
+  const [text, setText] = useState(query || "");
+  const trimmed = text.trim();
+
+  return (
+    <form
+      className="refine-form"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (trimmed) onSubmit(trimmed);
+      }}
+    >
+      <label className="field refine-field">
+        <Icon name="search" size={16} />
+        <input
+          autoFocus
+          value={text}
+          maxLength={100}
+          onChange={(event) => setText(event.target.value)}
+          onKeyDown={(event) => event.key === "Escape" && onCancel()}
+          placeholder="e.g. Casio G-Shock MTG-B3000 green"
+          aria-label="Describe the product"
+        />
+      </label>
+      <button type="submit" className="button button-primary" disabled={!trimmed}>
+        Search
+      </button>
+      <button type="button" className="button button-ghost" onClick={onCancel}>
+        Cancel
+      </button>
+      <p className="refine-hint">
+        Add a brand, model or colour. We'll search your photo again with these
+        words — this counts as a new search.
+      </p>
+    </form>
+  );
+}
+
 function RestoredBanner({ restoredAt, onSearchAgain }) {
   const [now] = useState(() => Date.now());
 
@@ -162,6 +200,7 @@ export default function ResultsView({
   isUpdating,
   restoredAt,
   onSearchAgain,
+  onRefine,
   query,
   bestMatches,
   cheapest,
@@ -170,6 +209,8 @@ export default function ResultsView({
   savedIds,
   onToggleSave,
 }) {
+  const [isRefining, setIsRefining] = useState(false);
+
   const allProducts = useMemo(() => {
     const unique = new Map();
     [...bestMatches, ...cheapest].forEach((product) =>
@@ -217,15 +258,36 @@ export default function ResultsView({
       <div className="results-header">
         <div className="results-title">
           <span className="eyebrow">Results</span>
-          <h2>
-            {query ? (
-              <>
-                Matches for <span className="query-chip">{query}</span>
-              </>
-            ) : (
-              "Matching products"
-            )}
-          </h2>
+          {isRefining ? (
+            <RefineForm
+              query={query}
+              onCancel={() => setIsRefining(false)}
+              onSubmit={(text) => {
+                setIsRefining(false);
+                onRefine(text);
+              }}
+            />
+          ) : (
+            <h2>
+              {query ? (
+                <>
+                  Matches for <span className="query-chip">{query}</span>
+                </>
+              ) : (
+                "Matching products"
+              )}
+              {onRefine && !isUpdating && (
+                <button
+                  type="button"
+                  className="button button-ghost button-sm refine-button"
+                  onClick={() => setIsRefining(true)}
+                >
+                  <Icon name="pencil" size={14} />
+                  {query ? "Not quite? Refine" : "Describe it"}
+                </button>
+              )}
+            </h2>
+          )}
         </div>
 
         <div className="stats">

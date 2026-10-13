@@ -1,15 +1,17 @@
 import { API_URL } from "./products.js";
 
 /**
- * Run a streamed image search.
+ * Run a streamed image search. An optional query (brand, model, colour…)
+ * narrows the Google Lens search for the same photo.
  *
  * The backend sends newline-delimited JSON events ("stage", "identified",
  * "preview", "final", "error"); onEvent is called for each one as it
  * arrives. Throws an Error with a user-facing message if the request fails.
  */
-export async function streamSearch(file, onEvent) {
+export async function streamSearch(file, onEvent, query) {
   const formData = new FormData();
   formData.append("file", file);
+  if (query) formData.append("query", query);
 
   const response = await fetch(`${API_URL}/api/v1/products/search-by-image/stream`, {
     method: "POST",

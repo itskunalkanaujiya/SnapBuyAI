@@ -10,7 +10,7 @@ import tempfile
 import threading
 import time
 
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -354,13 +354,32 @@ def check_search_limit(request: Request):
 # --------------------------------------------------
 
 
-def run_search(image: Image.Image, on_event=None) -> dict:
+MAX_QUERY_LENGTH = 100
+
+
+def clean_query(query: str | None) -> str | None:
+    """Normalise an optional user-typed product query."""
+    if not query:
+        return None
+
+    query = " ".join(query.split())[:MAX_QUERY_LENGTH]
+    return query or None
+
+
+def search_cache_key(image: Image.Image, query: str | None) -> str:
+    # The same photo searched with different words is a different search.
+    key = image_fingerprint(image)
+    return f"{key}:{query.lower()}" if query else key
+
+
+def run_search(image: Image.Image, on_event=None, query=None) -> dict:
     """Run the full online search for an image (blocking)."""
     with lens_ready_image(image) as image_path:
         return search_online_products(
             image_path=image_path,
             max_results=10,
             on_event=on_event,
+            query=query,
         )
 
 
@@ -405,11 +424,16 @@ def cache_if_useful(cache_key, response):
 
 
 @app.post("/api/v1/products/search-by-image")
-async def search_products_by_image(request: Request, file: UploadFile = File(...)):
+async def search_products_by_image(
+    request: Request,
+    file: UploadFile = File(...),
+    query: str | None = Form(None),
+):
     # Step 1: Validate and read the uploaded image.
     image = await read_uploaded_image(file)
+    query = clean_query(query)
 
-    cache_key = await run_in_threadpool(image_fingerprint, image)
+    cache_key = await run_in_threadpool(search_cache_key, image, query)
     cached = get_cached_search(cache_key)
 
     if cached is not None:
@@ -423,7 +447,7 @@ async def search_products_by_image(request: Request, file: UploadFile = File(...
     try:
         # Run the blocking work off the event loop so other requests
         # are still served while a search is in progress.
-        online_results = await run_in_threadpool(run_search, image)
+        online_results = await run_in_threadpool(run_search, image, None, query)
 
     except Exception as exc:
         print(f"Online product search failed: {exc}")
@@ -446,7 +470,9 @@ async def search_products_by_image(request: Request, file: UploadFile = File(...
 
 @app.post("/api/v1/products/search-by-image/stream")
 async def search_products_by_image_stream(
-    request: Request, file: UploadFile = File(...)
+    request: Request,
+    file: UploadFile = File(...),
+    query: str | None = Form(None),
 ):
     """
     Same search, streamed as newline-delimited JSON events:
@@ -463,8 +489,9 @@ async def search_products_by_image_stream(
     """
     # Validation errors are returned as normal HTTP errors before streaming.
     image = await read_uploaded_image(file)
+    query = clean_query(query)
 
-    cache_key = await run_in_threadpool(image_fingerprint, image)
+    cache_key = await run_in_threadpool(search_cache_key, image, query)
     cached = get_cached_search(cache_key)
 
     # Over-limit errors are also returned before streaming starts.
@@ -483,7 +510,9 @@ async def search_products_by_image_stream(
     def worker():
         try:
             emit("stage", {"stage": "identifying"})
-            response = build_search_response(run_search(image, on_event=emit))
+            response = build_search_response(
+                run_search(image, on_event=emit, query=query)
+            )
             cache_if_useful(cache_key, response)
             emit("final", {**response, "cached": False})
         except Exception as exc:

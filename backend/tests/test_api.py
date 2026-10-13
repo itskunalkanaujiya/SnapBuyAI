@@ -20,8 +20,8 @@ def fake_search(monkeypatch):
     """Replace the online search; records how often it really runs."""
     calls = []
 
-    def search(image_path, max_results, on_event=None):
-        calls.append(image_path)
+    def search(image_path, max_results, on_event=None, query=None):
+        calls.append(query)
         if on_event:
             on_event("identified", {"online_search_query": "watch"})
             on_event("preview", {
@@ -60,6 +60,32 @@ def test_repeat_search_is_served_from_cache(client, fake_search, png_bytes):
 
     assert (first["cached"], second["cached"], other["cached"]) == (False, True, False)
     assert len(fake_search) == 2
+
+
+def test_query_is_a_separate_cached_search(client, fake_search, png_bytes):
+    photo = png_bytes("red")
+    plain = client.post(SEARCH, files={"file": ("p.png", photo, "image/png")}).json()
+    refined = client.post(
+        SEARCH,
+        files={"file": ("p.png", photo, "image/png")},
+        data={"query": "  Casio   G-Shock  MTG-B3000 "},
+    ).json()
+    again = client.post(
+        SEARCH,
+        files={"file": ("p.png", photo, "image/png")},
+        data={"query": "casio g-shock mtg-b3000"},
+    ).json()
+
+    assert (plain["cached"], refined["cached"], again["cached"]) == (False, False, True)
+    # Extra spaces are removed before searching.
+    assert fake_search == [None, "Casio G-Shock MTG-B3000"]
+
+
+def test_clean_query():
+    assert main.clean_query(None) is None
+    assert main.clean_query("   ") is None
+    assert main.clean_query("a  b\n c") == "a b c"
+    assert len(main.clean_query("x" * 500)) == main.MAX_QUERY_LENGTH
 
 
 def test_stream_sends_events_in_order(client, fake_search, png_bytes):
@@ -112,6 +138,7 @@ def test_lens_retries_once_when_empty(monkeypatch, tmp_path):
 
     def fake_get(url, params, timeout):
         no_cache_flags.append(params.get("no_cache"))
+        assert "q" not in params  # no query: Lens identifies the product itself
         return _Json({"search_metadata": {}} if len(no_cache_flags) == 1 else {"visual_matches": matches})
 
     monkeypatch.setattr(s.requests, "get", fake_get)
@@ -134,3 +161,21 @@ class _Json:
 
     def json(self):
         return self._data
+
+
+def test_lens_query_is_sent_as_q(monkeypatch, tmp_path):
+    image = tmp_path / "photo.jpg"
+    image.write_bytes(b"\xff\xd8 fake jpeg")
+    monkeypatch.setenv("SERPAPI_API_KEY", "test")
+    monkeypatch.setattr(s.requests, "post", lambda *a, **k: _Json({"image_id": "img"}))
+
+    sent = []
+    match = {"title": "Casio watch", "source": "Flipkart", "link": "https://www.flipkart.com/x/p/itm1"}
+
+    def fake_get(url, params, timeout):
+        sent.append(params.get("q"))
+        return _Json({"visual_matches": [match]})
+
+    monkeypatch.setattr(s.requests, "get", fake_get)
+    s.run_google_lens(image, query="casio g-shock")
+    assert sent == ["casio g-shock"]

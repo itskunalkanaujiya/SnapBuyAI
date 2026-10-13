@@ -262,7 +262,10 @@ export default function App() {
     setTimeout(() => setHighlightPanel(false), 1600);
   }
 
-  async function search() {
+  // refineQuery: optional words to narrow the search (from "Refine").
+  async function search(refineQuery) {
+    const query = typeof refineQuery === "string" ? refineQuery.trim() : "";
+
     if (!file) {
       setError("Please upload a product photo first.");
       return;
@@ -305,7 +308,7 @@ export default function App() {
           default:
             break;
         }
-      });
+      }, query);
 
       if (!finalData) {
         throw new Error("The search ended unexpectedly. Please try again.");
@@ -449,7 +452,8 @@ export default function App() {
               <ResultsView
                 isUpdating={isSearching}
                 restoredAt={results.restoredAt}
-                onSearchAgain={search}
+                onSearchAgain={() => search()}
+                onRefine={search}
                 query={results.query}
                 bestMatches={results.bestMatches}
                 cheapest={results.cheapest}
