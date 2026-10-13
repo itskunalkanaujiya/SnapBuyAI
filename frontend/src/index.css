@@ -1,0 +1,170 @@
+/* =========================================
+   SnapBuy AI — design tokens and base styles
+   ========================================= */
+
+:root {
+  color-scheme: light;
+
+  --font-sans:
+    "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+
+  /* Surfaces */
+  --bg: #f6f6f8;
+  --surface: #ffffff;
+  --surface-2: #fafafb;
+  --surface-sunken: #f1f1f4;
+  --media-bg: #ffffff;
+  --border: #e5e5ea;
+  --border-strong: #d3d3dc;
+
+  /* Text */
+  --text: #0f101a;
+  --text-2: #4a4c5a;
+  --text-3: #80828f;
+
+  /* Brand */
+  --primary: #5a45f0;
+  --primary-hover: #4a35de;
+  --primary-soft: #efecfe;
+  --primary-text: #4632d4;
+  --on-primary: #ffffff;
+  --ring: rgba(90, 69, 240, 0.35);
+
+  /* Status */
+  --success: #0b7f56;
+  --success-soft: #e6f5ee;
+  --danger: #c8263f;
+  --danger-soft: #fdecef;
+  --neutral-soft: #f0f0f3;
+
+  /* Shape */
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+
+  --shadow-sm: 0 1px 2px rgba(15, 16, 26, 0.06);
+  --shadow-md: 0 1px 2px rgba(15, 16, 26, 0.04), 0 6px 20px -6px rgba(15, 16, 26, 0.12);
+  --shadow-lg: 0 2px 6px rgba(15, 16, 26, 0.04), 0 28px 56px -20px rgba(36, 24, 110, 0.22);
+
+  --header-height: 64px;
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+
+  font-family: var(--font-sans);
+  font-feature-settings: "cv11", "ss01";
+  color: var(--text);
+  background: var(--bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    --bg: #0b0c10;
+    --surface: #13141b;
+    --surface-2: #171821;
+    --surface-sunken: #0f1016;
+    --media-bg: #ffffff;
+    --border: #252631;
+    --border-strong: #33353f;
+
+    --text: #ededf3;
+    --text-2: #b0b2c0;
+    --text-3: #7e808f;
+
+    --primary: #7563ff;
+    --primary-hover: #8777ff;
+    --primary-soft: rgba(117, 99, 255, 0.15);
+    --primary-text: #a99eff;
+    --ring: rgba(135, 119, 255, 0.45);
+
+    --success: #3fcf92;
+    --success-soft: rgba(63, 207, 146, 0.12);
+    --danger: #ff6b82;
+    --danger-soft: rgba(255, 107, 130, 0.12);
+    --neutral-soft: rgba(255, 255, 255, 0.06);
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -8px rgba(0, 0, 0, 0.6);
+    --shadow-lg: 0 2px 6px rgba(0, 0, 0, 0.4), 0 28px 56px -20px rgba(0, 0, 0, 0.7);
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  min-width: 320px;
+  scroll-behavior: smooth;
+  scroll-padding-top: calc(var(--header-height) + 16px);
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  background: var(--bg);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+img {
+  display: block;
+  max-width: 100%;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+::selection {
+  color: var(--on-primary);
+  background: var(--primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

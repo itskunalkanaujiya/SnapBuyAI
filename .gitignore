@@ -1,0 +1,23 @@
+# Secrets — never commit API keys
+.env
+.env.*
+!.env.example
+
+# Python
+myvenv/
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Node / build output (frontend/.gitignore covers the rest)
+node_modules/
+dist/
+
+# Editors and OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
