@@ -1135,6 +1135,11 @@ kbd {
   flex: 1 1 420px;
 }
 
+.query-chip.is-typed,
+.recent-text strong.is-typed {
+  text-transform: none;
+}
+
 .stats {
   display: flex;
   flex-wrap: wrap;

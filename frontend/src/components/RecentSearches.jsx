@@ -43,7 +43,9 @@ export default function RecentSearches({ entries, onOpen, onRemove, onClear }) {
                 </span>
               )}
               <span className="recent-text">
-                <strong>{entry.query || "Product search"}</strong>
+                <strong className={entry.kind === "text" ? "is-typed" : ""}>
+                  {entry.query || "Product search"}
+                </strong>
                 <span>{summarize(entry.results)}</span>
                 <span className="recent-time">{formatTimeAgo(entry.savedAt, now)}</span>
               </span>

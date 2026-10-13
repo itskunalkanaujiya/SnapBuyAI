@@ -277,7 +277,8 @@ export default function ResultsView({
               {query ? (
                 <>
                   {kind === "text" ? "Results for" : "Matches for"}{" "}
-                  <span className="query-chip">{query}</span>
+                  {/* Typed searches are shown exactly as written ("boAt", "iPhone"). */}
+                  <span className={`query-chip ${kind === "text" ? "is-typed" : ""}`}>{query}</span>
                 </>
               ) : (
                 "Matching products"
