@@ -63,11 +63,16 @@ REQUEST_HEADERS = {
 PAGE_FETCH_TIMEOUT = 4
 PAGE_FETCH_WORKERS = 16
 
-# Seller pages still loading after this many seconds are skipped.
+# Seller pages still loading this many seconds after the Google Lens results
+# arrive are skipped, however late they started.
 PAGE_FETCH_DEADLINE = 8
 
 THUMBNAIL_TIMEOUT = 5
 THUMBNAIL_WORKERS = 16
+
+# Thumbnails still downloading after this many seconds are not scored.
+# Normally all arrive in about 2s; this only guards against a hung host.
+THUMBNAIL_DEADLINE = 4
 
 SUPPORTED_CURRENCIES = {"INR", "USD", "EUR", "GBP", "AED", "CAD", "AUD", "JPY"}
 
@@ -123,6 +128,16 @@ INDIAN_STORE_DOMAINS = {
     "urbanladder.com",
     "boat-lifestyle.com",
 }
+
+# Structured-data tags (JSON-LD, meta and itemprop links) that carry most
+# stores' price and stock. Parsing only these is far cheaper than parsing
+# the whole page, which otherwise slows down CLIP running alongside.
+STRUCTURED_TAG_PATTERN = re.compile(
+    r"<script[^>]*application/ld\+json[^>]*>.*?</script>"
+    r"|<meta\b[^>]*>"
+    r"|<link\b[^>]*itemprop[^>]*>",
+    re.IGNORECASE | re.DOTALL,
+)
 
 # URL paths that identify a single product page.
 PRODUCT_URL_PATTERN = re.compile(
@@ -456,12 +471,28 @@ def product_relevance_score(item, query):
 def title_keywords(item):
     """Return the meaningful words of a listing title, in title order."""
     title = (item.get("title") or "").lower()
+    title = re.sub(r"['’]s\b", "", title)  # "men's" -> "men"
 
-    return [
-        word
-        for word in re.findall(r"[a-z0-9]+", title)
-        if len(word) > 1 and word not in QUERY_STOPWORDS
-    ]
+    # Keep hyphenated names together ("g-shock"), and join a lone letter
+    # to the next word so "G Shock" also becomes "g-shock".
+    tokens = re.findall(r"[a-z0-9]+(?:-[a-z0-9]+)*", title)
+    words = []
+    index = 0
+
+    while index < len(tokens):
+        token = tokens[index]
+        is_letter = len(token) == 1 and token.isalpha()
+
+        if is_letter and token not in QUERY_STOPWORDS and index + 1 < len(tokens):
+            token = f"{token}-{tokens[index + 1]}"
+            index += 1
+
+        index += 1
+
+        if len(token) > 1 and token not in QUERY_STOPWORDS:
+            words.append(token)
+
+    return words
 
 
 def derive_product_query(candidates):
@@ -596,8 +627,37 @@ def download_thumbnail(url):
         return None
 
 
-def compute_visual_similarity_scores(image_path, candidates):
-    """Return CLIP cosine similarities, not probabilities."""
+def download_thumbnails(candidates):
+    """
+    Download every candidate's thumbnail in parallel.
+
+    Returns a list aligned with candidates (None where a download failed or
+    missed the deadline).
+    """
+    pool = ThreadPoolExecutor(max_workers=THUMBNAIL_WORKERS)
+    futures = [
+        pool.submit(download_thumbnail, item.get("thumbnail")) for item in candidates
+    ]
+    wait(futures, timeout=THUMBNAIL_DEADLINE)
+    pool.shutdown(wait=False, cancel_futures=True)
+
+    skipped = sum(1 for future in futures if not future.done())
+    if skipped:
+        print(f"Skipped {skipped} slow thumbnail(s).")
+
+    return [
+        future.result() if future.done() and not future.cancelled() else None
+        for future in futures
+    ]
+
+
+def compute_visual_similarity_scores(image_path, candidates, thumbnails=None):
+    """
+    Return CLIP cosine similarities, not probabilities.
+
+    Pass thumbnails from download_thumbnails() to reuse them; otherwise
+    they are downloaded here.
+    """
     if not candidates:
         return {}
 
@@ -613,14 +673,11 @@ def compute_visual_similarity_scores(image_path, candidates):
         print(f"Could not open uploaded image for CLIP: {exc}")
         return {}
 
+    if thumbnails is None:
+        thumbnails = download_thumbnails(candidates)
+
     valid_indices = []
     images = [query_image]
-
-    # Download all thumbnails at once instead of one after another.
-    with ThreadPoolExecutor(max_workers=THUMBNAIL_WORKERS) as pool:
-        thumbnails = list(
-            pool.map(download_thumbnail, [item.get("thumbnail") for item in candidates])
-        )
 
     for index, thumbnail in enumerate(thumbnails):
         if thumbnail is not None:
@@ -927,7 +984,6 @@ def fetch_page_details(url):
         )
         response.raise_for_status()
         html = response.text
-        soup = BeautifulSoup(html, "html.parser")
     except requests.RequestException as exc:
         print(f"Could not fetch product page {url}: {exc}")
         return details
@@ -936,25 +992,49 @@ def fetch_page_details(url):
 
     try:
         hostname = get_domain(url)
-        jsonld = list(iter_jsonld_objects(soup))
-        offers = [
-            item for item in jsonld if jsonld_types(item) & {"Offer", "AggregateOffer"}
-        ]
-        default_currency = "INR" if is_indian_store(url) else None
+        is_marketplace = hostname.endswith("flipkart.com") or (
+            hostname.endswith("amazon.in") or hostname.startswith("amazon.")
+        )
 
-        price_info = find_page_price(soup, html, hostname, offers, default_currency)
+        # Fast pass: read only the structured-data tags.
+        fragment = "".join(STRUCTURED_TAG_PATTERN.findall(html))
+        price_info, availability, is_product = read_page_details(
+            BeautifulSoup(fragment, "html.parser"), fragment, url
+        )
+
+        # Full pass only when the fast pass missed the price, or for
+        # Amazon/Flipkart, whose stock message is in the page body.
+        if price_info is None or (availability is None and is_marketplace):
+            price_info, availability, is_product = read_page_details(
+                BeautifulSoup(html, "html.parser"), html, url
+            )
+
         if price_info:
             details.update(price_info)
 
-        details["availability"] = find_page_availability(soup, hostname, offers)
-        details["is_product_page"] = bool(
-            offers or price_info or has_product_markup(soup, jsonld)
-        )
+        details["availability"] = availability
+        details["is_product_page"] = is_product
 
     except Exception as exc:
         print(f"Could not read product page {url}: {exc}")
 
     return details
+
+
+def read_page_details(soup, html, url):
+    """Return (price_info, availability, is_product_page) for a parsed page."""
+    hostname = get_domain(url)
+    jsonld = list(iter_jsonld_objects(soup))
+    offers = [
+        item for item in jsonld if jsonld_types(item) & {"Offer", "AggregateOffer"}
+    ]
+    default_currency = "INR" if is_indian_store(url) else None
+
+    price_info = find_page_price(soup, html, hostname, offers, default_currency)
+    availability = find_page_availability(soup, hostname, offers)
+    is_product = bool(offers or price_info or has_product_markup(soup, jsonld))
+
+    return price_info, availability, is_product
 
 
 def resolve_offer(item):
@@ -1033,7 +1113,7 @@ def needs_page_details(item):
     )
 
 
-def start_page_details(candidates):
+def start_page_details(candidates, deadline=None):
     """
     Start fetching seller pages in the background for listings missing
     price or stock, so the fetches overlap with CLIP scoring.
@@ -1044,7 +1124,10 @@ def start_page_details(candidates):
         for item in candidates
         if needs_page_details(item)
     }
-    return pool, futures, time.monotonic() + PAGE_FETCH_DEADLINE
+    if deadline is None:
+        deadline = time.monotonic() + PAGE_FETCH_DEADLINE
+
+    return pool, futures, deadline
 
 
 def finish_page_details(job):
@@ -1280,11 +1363,17 @@ def search_products_by_image(
 
     candidates = candidates[:candidate_limit]
 
-    # Seller pages load in the background while CLIP works.
-    page_job = start_page_details(candidates)
+    # Download thumbnails first: seller-page fetching competes for the CPU
+    # and would slow these downloads enough to miss some.
+    thumbnails = download_thumbnails(candidates)
+
+    # Seller pages then load in the background while CLIP runs.
+    page_job = start_page_details(candidates, deadline=lens_done + PAGE_FETCH_DEADLINE)
 
     # CLIP reorders the larger pool by visual similarity.
-    similarity_scores = compute_visual_similarity_scores(image_path, candidates)
+    similarity_scores = compute_visual_similarity_scores(
+        image_path, candidates, thumbnails
+    )
     clip_done = time.monotonic()
 
     for index, item in enumerate(candidates):
