@@ -4,8 +4,16 @@ import CropDialog from "./components/CropDialog.jsx";
 import Icon, { Logo } from "./components/Icon.jsx";
 import Landing from "./components/Landing.jsx";
 import ProductCard from "./components/ProductCard.jsx";
+import RecentSearches from "./components/RecentSearches.jsx";
 import ResultsView, { ResultsLoading } from "./components/ResultsView.jsx";
 import UploadPanel from "./components/UploadPanel.jsx";
+import {
+  addToHistory,
+  dataUrlToFile,
+  makeThumbnail,
+  readHistory,
+  writeHistory,
+} from "./lib/history.js";
 import { streamSearch } from "./lib/searchStream.js";
 import {
   ALLOWED_IMAGE_TYPES,
@@ -80,6 +88,7 @@ export default function App() {
   const [results, setResults] = useState(null);
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [saved, setSaved] = useState(readSaved);
+  const [history, setHistory] = useState(readHistory);
 
   const savedIds = useMemo(() => new Set(saved.map(getProductId)), [saved]);
 
@@ -102,6 +111,10 @@ export default function App() {
       if (originalUrl) URL.revokeObjectURL(originalUrl);
     };
   }, [originalUrl]);
+
+  useEffect(() => {
+    writeHistory(history);
+  }, [history]);
 
   // Drive the progress steps while a search is running.
   useEffect(() => {
@@ -170,6 +183,37 @@ export default function App() {
   }
 
   const closeCrop = useCallback(() => setIsCropping(false), []);
+
+  // Reopen a recent search: its photo and results, without searching again.
+  function openRecent(entry) {
+    const restored = dataUrlToFile(entry.image, entry.fileName);
+
+    setError("");
+    setOriginalFile(restored);
+    setOriginalUrl(URL.createObjectURL(restored));
+    setFile(restored);
+    setPreviewUrl(URL.createObjectURL(restored));
+    setFilters(DEFAULT_FILTERS);
+    setView("discover");
+    scrolledRef.current = false;
+    setResults({ ...entry.results, restoredAt: entry.savedAt });
+  }
+
+  function rememberSearch(searchedFile, finalResults) {
+    const entry = {
+      id: String(Date.now()),
+      query: finalResults.query,
+      fileName: searchedFile.name,
+      savedAt: Date.now(),
+      results: finalResults,
+    };
+
+    makeThumbnail(searchedFile)
+      .then((image) => setHistory((current) => addToHistory(current, { ...entry, image })))
+      .catch(() => {
+        // History is a convenience; skip it if the photo can't be read.
+      });
+  }
 
   function removeImage() {
     setFile(null);
@@ -281,6 +325,7 @@ export default function App() {
       setIsComplete(true);
       await new Promise((resolve) => setTimeout(resolve, PROGRESS_FINISH_MS));
       setResults(finalResults);
+      rememberSearch(file, finalResults);
     } catch (searchError) {
       // Keep any preview results, but stop showing them as "checking".
       setResults(clearPending);
@@ -403,6 +448,8 @@ export default function App() {
             {results && (
               <ResultsView
                 isUpdating={isSearching}
+                restoredAt={results.restoredAt}
+                onSearchAgain={search}
                 query={results.query}
                 bestMatches={results.bestMatches}
                 cheapest={results.cheapest}
@@ -410,6 +457,17 @@ export default function App() {
                 onFiltersChange={setFilters}
                 savedIds={savedIds}
                 onToggleSave={toggleSaved}
+              />
+            )}
+
+            {!isSearching && (
+              <RecentSearches
+                entries={history}
+                onOpen={openRecent}
+                onRemove={(id) =>
+                  setHistory((current) => current.filter((entry) => entry.id !== id))
+                }
+                onClear={() => setHistory([])}
               />
             )}
 

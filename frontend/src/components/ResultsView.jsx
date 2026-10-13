@@ -1,5 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Icon from "./Icon.jsx";
+import { formatTimeAgo } from "../lib/history.js";
 import ProductCard, { ProductCardSkeleton } from "./ProductCard.jsx";
 import {
   DEFAULT_FILTERS,
@@ -140,8 +141,27 @@ export function ResultsLoading() {
   );
 }
 
+function RestoredBanner({ restoredAt, onSearchAgain }) {
+  const [now] = useState(() => Date.now());
+
+  return (
+    <div className="updating-banner restored-banner" role="status">
+      <Icon name="refresh" size={16} />
+      <span>
+        Saved results from {formatTimeAgo(restoredAt, now)}. Prices and stock
+        may have changed.
+      </span>
+      <button type="button" className="button button-secondary button-sm" onClick={onSearchAgain}>
+        Search again
+      </button>
+    </div>
+  );
+}
+
 export default function ResultsView({
   isUpdating,
+  restoredAt,
+  onSearchAgain,
   query,
   bestMatches,
   cheapest,
@@ -214,6 +234,10 @@ export default function ResultsView({
           <Stat icon="box" label="In stock" value={stats.inStock} />
         </div>
       </div>
+
+      {restoredAt && !isUpdating && (
+        <RestoredBanner restoredAt={restoredAt} onSearchAgain={onSearchAgain} />
+      )}
 
       {isUpdating && (
         <div className="updating-banner" role="status">
