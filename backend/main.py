@@ -46,12 +46,22 @@ app = FastAPI(
 # 2. Allow requests from the React frontend
 # --------------------------------------------------
 
+# Local development is always allowed. In production, list the frontend's
+# address in ALLOWED_ORIGINS (comma-separated), and optionally allow Vercel
+# preview deployments with ALLOWED_ORIGIN_REGEX, for example
+#   https://snapbuy-ai(-[a-z0-9-]+)?\.vercel\.app
+LOCAL_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
+
+allowed_origins = LOCAL_ORIGINS + [
+    origin.strip().rstrip("/")
+    for origin in os.getenv("ALLOWED_ORIGINS", "").split(",")
+    if origin.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ],
+    allow_origins=allowed_origins,
+    allow_origin_regex=os.getenv("ALLOWED_ORIGIN_REGEX") or None,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -310,8 +320,27 @@ def store_cached_search(key, result):
 SEARCH_LIMIT = int(os.getenv("SEARCH_LIMIT", "10"))
 SEARCH_WINDOW_SECONDS = int(os.getenv("SEARCH_WINDOW_SECONDS", "600"))
 
+# Behind a hosting proxy (Hugging Face Spaces, Render, ...) every request
+# arrives from the proxy, so the visitor's address must be read from
+# X-Forwarded-For. Only enable this when a trusted proxy sets that header.
+TRUST_PROXY_HEADERS = os.getenv("TRUST_PROXY_HEADERS", "false").lower() in {
+    "true",
+    "1",
+    "yes",
+}
+
 _search_log = {}
 _search_log_lock = threading.Lock()
+
+
+def client_address(request: Request) -> str:
+    if TRUST_PROXY_HEADERS:
+        forwarded = request.headers.get("x-forwarded-for", "")
+        first_hop = forwarded.split(",")[0].strip()
+        if first_hop:
+            return first_hop
+
+    return request.client.host if request.client else "unknown"
 
 
 def check_search_limit(request: Request):
@@ -319,7 +348,7 @@ def check_search_limit(request: Request):
     if SEARCH_LIMIT <= 0:
         return
 
-    client = request.client.host if request.client else "unknown"
+    client = client_address(request)
     now = time.monotonic()
 
     with _search_log_lock:

@@ -179,3 +179,52 @@ def test_lens_query_is_sent_as_q(monkeypatch, tmp_path):
     monkeypatch.setattr(s.requests, "get", fake_get)
     s.run_google_lens(image, query="casio g-shock")
     assert sent == ["casio g-shock"]
+
+
+def test_search_limit_is_per_visitor_behind_a_proxy(client, fake_search, png_bytes, monkeypatch):
+    monkeypatch.setattr(main, "SEARCH_LIMIT", 1)
+    monkeypatch.setattr(main, "TRUST_PROXY_HEADERS", True)
+
+    def search_as(visitor, color):
+        return client.post(
+            SEARCH,
+            files={"file": ("p.png", png_bytes(color), "image/png")},
+            headers={"X-Forwarded-For": f"{visitor}, 10.0.0.1"},
+        )
+
+    assert search_as("203.0.113.5", "red").status_code == 200
+    assert search_as("198.51.100.7", "green").status_code == 200  # different visitor
+    assert search_as("203.0.113.5", "blue").status_code == 429
+
+
+def test_forwarded_header_ignored_unless_trusted(client, monkeypatch):
+    monkeypatch.setattr(main, "TRUST_PROXY_HEADERS", False)
+    request = type("R", (), {"headers": {"x-forwarded-for": "1.2.3.4"},
+                             "client": type("C", (), {"host": "127.0.0.1"})()})()
+    assert main.client_address(request) == "127.0.0.1"
+
+
+def test_cors_allows_configured_origins(monkeypatch):
+    import importlib
+
+    monkeypatch.setenv("ALLOWED_ORIGINS", "https://snapbuy-ai.vercel.app/")
+    monkeypatch.setenv("ALLOWED_ORIGIN_REGEX", r"https://snapbuy-ai(-[a-z0-9-]+)?\.vercel\.app")
+    try:
+        app = importlib.reload(main).app
+        test_client = TestClient(app)
+
+        def allowed(origin):
+            response = test_client.options(
+                SEARCH,
+                headers={"Origin": origin, "Access-Control-Request-Method": "POST"},
+            )
+            return response.headers.get("access-control-allow-origin") == origin
+
+        assert allowed("https://snapbuy-ai.vercel.app")
+        assert allowed("https://snapbuy-ai-git-main-kunal.vercel.app")
+        assert allowed("http://localhost:5173")
+        assert not allowed("https://evil.example.com")
+    finally:
+        monkeypatch.delenv("ALLOWED_ORIGINS")
+        monkeypatch.delenv("ALLOWED_ORIGIN_REGEX")
+        importlib.reload(main)
