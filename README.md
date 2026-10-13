@@ -61,6 +61,17 @@ npm run dev
 Open http://127.0.0.1:5173. To point the app at a different backend, set
 `VITE_API_URL` (for example in `frontend/.env.local`).
 
+### Tests
+
+The backend tests run offline: Google Lens, CLIP and seller pages are
+replaced with fakes, so no SerpApi credit is used.
+
+```bash
+cd backend
+pip install -r requirements-dev.txt
+python -m pytest
+```
+
 ## API
 
 | Method | Path | Description |
