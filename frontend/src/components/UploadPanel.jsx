@@ -96,6 +96,7 @@ export default function UploadPanel({
   onSearch,
 }) {
   const inputRef = useRef(null);
+  const cameraRef = useRef(null);
   const dragDepth = useRef(0);
   const [isDragging, setIsDragging] = useState(false);
 
@@ -208,15 +209,44 @@ export default function UploadPanel({
             <Icon name="upload" size={22} />
           </span>
           <p className="dropzone-title">
-            <strong>Click to upload</strong> or drag and drop
+            <span className="only-pointer">
+              <strong>Click to upload</strong> or drag and drop
+            </span>
+            <span className="only-touch">
+              <strong>Tap to choose a photo</strong>
+            </span>
           </p>
           <p className="dropzone-subtitle">JPG, PNG or WebP · up to 8 MB</p>
-          <p className="dropzone-paste">
+          <p className="dropzone-paste only-pointer">
             <Icon name="clipboard" size={13} />
             You can also paste an image with <kbd>Ctrl</kbd> + <kbd>V</kbd>
           </p>
         </div>
       )}
+
+      {!previewUrl && (
+        <button
+          type="button"
+          className="button button-secondary camera-button only-touch"
+          onClick={() => cameraRef.current?.click()}
+        >
+          <Icon name="camera" size={18} />
+          Take a photo
+        </button>
+      )}
+
+      {/* Opens the rear camera directly on phones and tablets. */}
+      <input
+        ref={cameraRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        hidden
+        onChange={(event) => {
+          onSelect(event.target.files?.[0]);
+          event.target.value = "";
+        }}
+      />
 
       <input
         ref={inputRef}

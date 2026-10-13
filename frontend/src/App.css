@@ -815,6 +815,26 @@ kbd {
   color: var(--danger);
 }
 
+/* Touch devices (phones, tablets) vs mouse/trackpad. */
+.only-touch {
+  display: none !important;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .only-touch {
+    display: inline-flex !important;
+  }
+
+  .only-pointer {
+    display: none !important;
+  }
+}
+
+.camera-button {
+  width: 100%;
+  height: 46px;
+}
+
 /* ---------- Results ---------- */
 
 .results-anchor {
