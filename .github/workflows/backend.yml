@@ -33,27 +33,3 @@ jobs:
 
       - name: Run tests
         run: python -m pytest -q
-
-  # Pushes backend/ to the Hugging Face Space, which rebuilds the Docker image.
-  # Needs the repository variable HF_SPACE (e.g. "username/snapbuy-ai-api")
-  # and the secret HF_TOKEN (a Hugging Face token with write access).
-  deploy:
-    needs: test
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.HF_SPACE != ''
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Push backend to Hugging Face Spaces
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          HF_SPACE: ${{ vars.HF_SPACE }}
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git subtree split --prefix backend -b space-deploy
-          git push --force \
-            "https://${HF_SPACE%%/*}:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE}" \
-            space-deploy:main

@@ -22,9 +22,9 @@ RUN pip install --index-url https://download.pytorch.org/whl/cpu torch==2.14.1 \
     && pip install -r requirements.txt
 
 # Bake the CLIP model into the image so the server starts without downloading.
-RUN python -c "from transformers import CLIPModel, CLIPProcessor; \
-name = 'openai/clip-vit-base-patch32'; \
-CLIPProcessor.from_pretrained(name); CLIPModel.from_pretrained(name)" \
+RUN python -c "from transformers import CLIPImageProcessor, CLIPVisionModelWithProjection; \
+name = 'kunalkanaujiya/clip-vit-base-patch32-vision'; \
+CLIPImageProcessor.from_pretrained(name); CLIPVisionModelWithProjection.from_pretrained(name)" \
     && chown -R user:user /app
 
 COPY --chown=user:user . .

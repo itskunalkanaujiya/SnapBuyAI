@@ -1,0 +1,30 @@
+# Used by Vercel (built with uv). requirements.txt is the equivalent for pip
+# and the Dockerfile; keep the two dependency lists in sync.
+[project]
+name = "snapbuy-ai-backend"
+version = "0.5.0"
+description = "SnapBuy AI visual product search API"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "fastapi==0.143.0",
+    "python-multipart==0.0.32",
+    "pillow==12.3.0",
+    "requests==2.34.2",
+    "beautifulsoup4==4.15.0",
+    "python-dotenv==1.2.4",
+    "torch==2.14.1",
+    "transformers==5.19.0",
+]
+
+# Install the CPU-only PyTorch build; the default one bundles ~2 GB of CUDA
+# libraries that a serverless CPU function cannot use.
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.vercel]
+entrypoint = "main:app"

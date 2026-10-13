@@ -13,17 +13,22 @@ import requests
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 
+# On Vercel only /tmp is writable, so the downloaded model is cached there.
+# This must be set before transformers is imported.
+if os.getenv("VERCEL") and not os.getenv("HF_HOME"):
+    os.environ["HF_HOME"] = "/tmp/huggingface"
+
 try:
     import torch
     from PIL import Image
-    from transformers import CLIPModel, CLIPProcessor
+    from transformers import CLIPImageProcessor, CLIPVisionModelWithProjection
 
     CLIP_AVAILABLE = True
 except ImportError:
     torch = None
     Image = None
-    CLIPModel = None
-    CLIPProcessor = None
+    CLIPImageProcessor = None
+    CLIPVisionModelWithProjection = None
     CLIP_AVAILABLE = False
 
 
@@ -36,7 +41,12 @@ load_dotenv(BASE_DIR / ".env")
 
 SERPAPI_URL = "https://serpapi.com/search.json"
 SERPAPI_IMAGE_URL = "https://serpapi.com/image"
-CLIP_MODEL_NAME = "openai/clip-vit-base-patch32"
+# CLIP ViT-B/32 image encoder only, stored in half precision (176 MB instead
+# of 605 MB for the full model) so it fits serverless /tmp limits. Scores
+# match openai/clip-vit-base-patch32 to within ~0.0003.
+CLIP_MODEL_NAME = os.getenv(
+    "CLIP_MODEL_NAME", "kunalkanaujiya/clip-vit-base-patch32-vision"
+)
 
 ENABLE_CLIP_RANKING = os.getenv("ENABLE_CLIP_RANKING", "true").lower() in {
     "true",
@@ -569,17 +579,20 @@ def load_clip_model():
             # Use the cached copy without contacting the Hub; download
             # only if the model has never been fetched.
             try:
-                _clip_processor = CLIPProcessor.from_pretrained(
+                _clip_processor = CLIPImageProcessor.from_pretrained(
                     CLIP_MODEL_NAME, local_files_only=True
                 )
-                _clip_model = CLIPModel.from_pretrained(
+                _clip_model = CLIPVisionModelWithProjection.from_pretrained(
                     CLIP_MODEL_NAME, local_files_only=True
                 )
             except OSError:
-                _clip_processor = CLIPProcessor.from_pretrained(CLIP_MODEL_NAME)
-                _clip_model = CLIPModel.from_pretrained(CLIP_MODEL_NAME)
+                _clip_processor = CLIPImageProcessor.from_pretrained(CLIP_MODEL_NAME)
+                _clip_model = CLIPVisionModelWithProjection.from_pretrained(
+                    CLIP_MODEL_NAME
+                )
 
-            _clip_model.eval()
+            # Weights are stored in half precision; compute in float32 on CPU.
+            _clip_model = _clip_model.float().eval()
             print("CLIP model loaded successfully.")
             return _clip_model, _clip_processor
 

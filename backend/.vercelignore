@@ -1,0 +1,12 @@
+# Never upload secrets; set SERPAPI_API_KEY as a Vercel environment variable.
+.env
+.env.*
+!.env.example
+
+# Not needed by the deployed function.
+tests/
+.pytest_cache/
+__pycache__/
+*.pyc
+Dockerfile
+.dockerignore

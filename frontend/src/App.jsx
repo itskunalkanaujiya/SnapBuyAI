@@ -14,6 +14,7 @@ import {
   readHistory,
   writeHistory,
 } from "./lib/history.js";
+import { prepareForUpload } from "./lib/resizeImage.js";
 import { streamSearch } from "./lib/searchStream.js";
 import {
   ALLOWED_IMAGE_TYPES,
@@ -286,7 +287,9 @@ export default function App() {
     let finalData = null;
 
     try {
-      await streamSearch(file, (event) => {
+      const upload = await prepareForUpload(file);
+
+      await streamSearch(upload, (event) => {
         switch (event.type) {
           case "stage":
             advanceStage(STAGE.identifying);

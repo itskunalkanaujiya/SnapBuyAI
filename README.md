@@ -13,8 +13,9 @@ online stores in India, with prices and stock availability.
    No search text is needed — Lens identifies the product, and SnapBuy builds
    a short product query from the titles of the matching listings.
 2. Non-shopping and non-product pages are filtered out, and duplicates removed.
-3. **CLIP** (`openai/clip-vit-base-patch32`) re-ranks listings by visual
-   similarity to your photo.
+3. **CLIP** (the ViT-B/32 image encoder, from
+   [kunalkanaujiya/clip-vit-base-patch32-vision](https://huggingface.co/kunalkanaujiya/clip-vit-base-patch32-vision))
+   re-ranks listings by visual similarity to your photo.
 4. Missing prices and stock status are read from seller pages (structured
    product data, page metadata, and Amazon/Flipkart-specific markup).
 
@@ -47,7 +48,7 @@ cp .env.example .env              # then put your SerpApi key in .env
 uvicorn main:app --host 127.0.0.1 --port 8000
 ```
 
-The first start downloads the CLIP model (about 600 MB). API docs are at
+The first start downloads the CLIP image encoder (about 176 MB). API docs are at
 http://127.0.0.1:8000/docs.
 
 ### Frontend
@@ -71,6 +72,24 @@ cd backend
 pip install -r requirements-dev.txt
 python -m pytest
 ```
+
+## Deployment
+
+Both parts run on Vercel as two projects connected to this repository; every
+push to `main` redeploys them.
+
+| Project | Root directory | Address | Settings |
+|---|---|---|---|
+| `snapbuy-ai` (frontend) | `frontend` | https://snapbuy-ai.vercel.app | `VITE_API_URL=https://snapbuy-ai-api.vercel.app` |
+| `snapbuy-ai-api` (backend) | `backend` | https://snapbuy-ai-api.vercel.app | `SERPAPI_API_KEY` (encrypted), `TRUST_PROXY_HEADERS`, `ALLOWED_ORIGIN_REGEX`, `VERCEL_SUPPORT_LARGE_FUNCTIONS=1` |
+
+The backend bundle includes CPU-only PyTorch (about 1 GB), so it uses Vercel's
+large functions. On a cold start it loads PyTorch and downloads the CLIP image
+encoder to `/tmp`, so the first search after an idle period is slower. The
+result cache and search limit are kept per server instance.
+
+The `backend/Dockerfile` builds the same backend as a container for any Docker
+host.
 
 ## API
 
