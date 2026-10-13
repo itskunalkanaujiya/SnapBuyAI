@@ -13,7 +13,7 @@ export const AVAILABILITY_LABELS = {
 export const DEFAULT_FILTERS = {
   text: "",
   maxPrice: "",
-  minMatch: "0",
+  minMatch: "any",
   store: "all",
   sort: "relevance",
 };
@@ -61,14 +61,30 @@ export function formatPrice(product) {
   return price === null ? null : formatAmount(price, product.currency || "INR");
 }
 
-/** Visual match percentage from CLIP, or null when it was not scored. */
-export function getMatchPercent(product) {
-  const score = Number(product.visual_similarity_score);
-  if (product.visual_similarity_score == null || !Number.isFinite(score)) {
-    return null;
-  }
+// CLIP similarity is not a percentage: even unrelated products of the same
+// kind score around 0.7. Thresholds calibrated on real searches:
+//   ~0.95  the same item (often the same photo)
+//   0.80+  a similar-looking product
+//   <0.78  same kind of product, clearly different look
+export const MATCH_LEVELS = [
+  { key: "close", label: "Very close", minScore: 0.88, rank: 3 },
+  { key: "similar", label: "Similar", minScore: 0.78, rank: 2 },
+  { key: "related", label: "Related", minScore: -Infinity, rank: 1 },
+];
 
-  return Math.round(Math.max(0, Math.min(1, score)) * 100);
+/** Raw CLIP similarity for sorting, or null when it was not scored. */
+export function getMatchScore(product) {
+  const score = Number(product.visual_similarity_score);
+  return product.visual_similarity_score == null || !Number.isFinite(score)
+    ? null
+    : score;
+}
+
+/** Visual match level ({key, label, rank}), or null when not scored. */
+export function getMatchLevel(product) {
+  const score = getMatchScore(product);
+  if (score === null) return null;
+  return MATCH_LEVELS.find((level) => score >= level.minScore);
 }
 
 export function getAvailability(product) {
@@ -86,7 +102,8 @@ export function hasActiveFilters(filters) {
 export function applyFilters(products, filters) {
   const query = filters.text.trim().toLowerCase();
   const budget = filters.maxPrice === "" ? null : Number(filters.maxPrice);
-  const minimum = Number(filters.minMatch) || 0;
+  const minimumRank =
+    MATCH_LEVELS.find((level) => level.key === filters.minMatch)?.rank ?? 0;
 
   const filtered = products.filter((product) => {
     if (
@@ -105,9 +122,9 @@ export function applyFilters(products, filters) {
       if (price === null || price > budget) return false;
     }
 
-    if (minimum > 0) {
-      const match = getMatchPercent(product);
-      if (match === null || match < minimum) return false;
+    if (minimumRank > 0) {
+      const level = getMatchLevel(product);
+      if (!level || level.rank < minimumRank) return false;
     }
 
     if (filters.store !== "all" && product.marketplace !== filters.store) {
@@ -133,7 +150,7 @@ export function applyFilters(products, filters) {
       return filtered.sort((a, b) => byPrice(a, b, -1));
     case "match":
       return filtered.sort(
-        (a, b) => (getMatchPercent(b) ?? -1) - (getMatchPercent(a) ?? -1)
+        (a, b) => (getMatchScore(b) ?? -1) - (getMatchScore(a) ?? -1)
       );
     default:
       return filtered;

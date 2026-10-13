@@ -1,15 +1,16 @@
-from collections import OrderedDict
+from collections import OrderedDict, deque
 from contextlib import asynccontextmanager, contextmanager
 from io import BytesIO
 from pathlib import Path
 import asyncio
 import hashlib
 import json
+import os
 import tempfile
 import threading
 import time
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -222,8 +223,9 @@ def health():
 
 
 @app.post("/api/v1/products/recognize-image")
-async def recognize_image(file: UploadFile = File(...)):
+async def recognize_image(request: Request, file: UploadFile = File(...)):
     image = await read_uploaded_image(file)
+    check_search_limit(request)
 
     def identify(image):
         with lens_ready_image(image) as image_path:
@@ -299,7 +301,56 @@ def store_cached_search(key, result):
 
 
 # --------------------------------------------------
-# 9. Search online products using an image
+# 9. Limit searches per client
+# --------------------------------------------------
+
+# Every uncached search spends SerpApi credit, so each client (by IP
+# address) gets a limited number per time window. Cached results are free
+# and do not count. Set SEARCH_LIMIT=0 in .env to turn the limit off.
+SEARCH_LIMIT = int(os.getenv("SEARCH_LIMIT", "10"))
+SEARCH_WINDOW_SECONDS = int(os.getenv("SEARCH_WINDOW_SECONDS", "600"))
+
+_search_log = {}
+_search_log_lock = threading.Lock()
+
+
+def check_search_limit(request: Request):
+    """Record a search for this client, or raise 429 if over the limit."""
+    if SEARCH_LIMIT <= 0:
+        return
+
+    client = request.client.host if request.client else "unknown"
+    now = time.monotonic()
+
+    with _search_log_lock:
+        # Drop searches that have left the window (and idle clients).
+        for key in list(_search_log):
+            log = _search_log[key]
+            while log and now - log[0] > SEARCH_WINDOW_SECONDS:
+                log.popleft()
+            if not log:
+                del _search_log[key]
+
+        log = _search_log.setdefault(client, deque())
+
+        if len(log) >= SEARCH_LIMIT:
+            retry_after = int(SEARCH_WINDOW_SECONDS - (now - log[0])) + 1
+            minutes = max(1, round(retry_after / 60))
+            raise HTTPException(
+                status_code=429,
+                detail=(
+                    f"You've reached the limit of {SEARCH_LIMIT} searches. "
+                    f"Please try again in about {minutes} "
+                    f"minute{'s' if minutes != 1 else ''}."
+                ),
+                headers={"Retry-After": str(retry_after)},
+            )
+
+        log.append(now)
+
+
+# --------------------------------------------------
+# 10. Search online products using an image
 # --------------------------------------------------
 
 
@@ -354,7 +405,7 @@ def cache_if_useful(cache_key, response):
 
 
 @app.post("/api/v1/products/search-by-image")
-async def search_products_by_image(file: UploadFile = File(...)):
+async def search_products_by_image(request: Request, file: UploadFile = File(...)):
     # Step 1: Validate and read the uploaded image.
     image = await read_uploaded_image(file)
 
@@ -364,6 +415,8 @@ async def search_products_by_image(file: UploadFile = File(...)):
     if cached is not None:
         print("Search served from cache.")
         return {**cached, "cached": True}
+
+    check_search_limit(request)
 
     # Step 2: Search online. Google Lens identifies the product itself,
     # and the search query is derived from its results.
@@ -387,12 +440,14 @@ async def search_products_by_image(file: UploadFile = File(...)):
 
 
 # --------------------------------------------------
-# 10. Streamed search: show results as they become ready
+# 11. Streamed search: show results as they become ready
 # --------------------------------------------------
 
 
 @app.post("/api/v1/products/search-by-image/stream")
-async def search_products_by_image_stream(file: UploadFile = File(...)):
+async def search_products_by_image_stream(
+    request: Request, file: UploadFile = File(...)
+):
     """
     Same search, streamed as newline-delimited JSON events:
 
@@ -411,6 +466,10 @@ async def search_products_by_image_stream(file: UploadFile = File(...)):
 
     cache_key = await run_in_threadpool(image_fingerprint, image)
     cached = get_cached_search(cache_key)
+
+    # Over-limit errors are also returned before streaming starts.
+    if cached is None:
+        check_search_limit(request)
 
     loop = asyncio.get_running_loop()
     queue = asyncio.Queue()

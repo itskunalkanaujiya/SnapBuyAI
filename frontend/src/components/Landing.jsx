@@ -110,10 +110,12 @@ function Features() {
               <span className="demo-chip">Men analog digital watch</span>
               <div className="demo-match">
                 <span className="demo-ring" style={{ "--value": 95 }}>
-                  <span>95%</span>
+                  <span>
+                    <Icon name="check" size={18} />
+                  </span>
                 </span>
                 <span className="demo-match-text">
-                  <strong>Visual match</strong>
+                  <strong>Very close match</strong>
                   Ranked by AI similarity
                 </span>
               </div>

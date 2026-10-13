@@ -4,7 +4,7 @@ import {
   AVAILABILITY_LABELS,
   formatPrice,
   getAvailability,
-  getMatchPercent,
+  getMatchLevel,
 } from "../lib/products.js";
 
 function StoreIcon({ product }) {
@@ -33,7 +33,7 @@ function StoreIcon({ product }) {
 export default function ProductCard({ product, isSaved, onToggleSave, highlight }) {
   const [imageFailed, setImageFailed] = useState(!product.image_url);
 
-  const match = getMatchPercent(product);
+  const match = getMatchLevel(product);
   const availability = getAvailability(product);
   const price = formatPrice(product);
   const store = product.marketplace || "Online store";
@@ -62,9 +62,13 @@ export default function ProductCard({ product, isSaved, onToggleSave, highlight 
               {highlight}
             </span>
           )}
-          {match !== null && (
-            <span className="badge badge-glass" title="Visual similarity to your photo">
-              {match}% match
+          {match && (
+            <span
+              className={`badge badge-glass match-${match.key}`}
+              title="How closely this listing's photo resembles yours"
+            >
+              <span className="match-dot" />
+              {match.label}
             </span>
           )}
         </div>

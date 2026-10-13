@@ -185,6 +185,21 @@ main {
   backdrop-filter: blur(6px);
 }
 
+.match-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #9a9cab;
+}
+
+.match-close .match-dot {
+  background: #12a46b;
+}
+
+.match-similar .match-dot {
+  background: #6b5cf6;
+}
+
 .badge-accent {
   background: var(--primary);
   color: var(--on-primary);
@@ -1651,14 +1666,14 @@ label.field input::placeholder {
   background: conic-gradient(var(--primary) calc(var(--value) * 1%), var(--surface-sunken) 0);
 }
 
-.demo-ring span {
+.demo-ring > span {
   display: grid;
   width: 42px;
   height: 42px;
   place-items: center;
   border-radius: 50%;
   background: var(--surface);
-  color: var(--text);
+  color: var(--primary);
   font-size: 12px;
   font-weight: 700;
 }

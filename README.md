@@ -74,6 +74,14 @@ Open http://127.0.0.1:5173. To point the app at a different backend, set
 
 - Each search uses one SerpApi search (two if Google Lens returns nothing and
   SnapBuy retries). Identical photos are served from a one-hour cache.
+- To protect your SerpApi quota, each client (IP address) can run 10 uncached
+  searches per 10 minutes; further searches get HTTP 429 with a `Retry-After`
+  header. Change this with `SEARCH_LIMIT` and `SEARCH_WINDOW_SECONDS` in
+  `backend/.env` (`SEARCH_LIMIT=0` turns it off).
+- Match labels come from CLIP similarity: **Very close** (≥ 0.88, usually the
+  same item), **Similar** (≥ 0.78) and **Related** (same kind of product).
+  These thresholds were calibrated on real searches and live in
+  `frontend/src/lib/products.js`.
 - Prices and stock are read at search time and may change. Some stores block
   automated price checks, so a few listings show "Price on store".
 - On Windows, run uvicorn **without** `--reload`; the auto-reloader can stall

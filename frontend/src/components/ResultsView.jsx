@@ -65,10 +65,9 @@ function Toolbar({ filters, onChange, stores, shownCount, totalCount }) {
       </select>
 
       <select className="field" value={filters.minMatch} onChange={set("minMatch")} aria-label="Minimum visual match">
-        <option value="0">Any match</option>
-        <option value="70">70%+ match</option>
-        <option value="80">80%+ match</option>
-        <option value="90">90%+ match</option>
+        <option value="any">Any match</option>
+        <option value="similar">Similar or closer</option>
+        <option value="close">Very close only</option>
       </select>
 
       <select className="field" value={filters.sort} onChange={set("sort")} aria-label="Sort by">
