@@ -1,32 +1,24 @@
 import { API_URL } from "./products.js";
 
+const GENERIC_ERROR = "Something went wrong while searching. Please try again.";
+
 /**
- * Run a streamed image search. An optional query (brand, model, colour…)
- * narrows the Google Lens search for the same photo.
+ * Read a streamed search response.
  *
  * The backend sends newline-delimited JSON events ("stage", "identified",
  * "preview", "final", "error"); onEvent is called for each one as it
  * arrives. Throws an Error with a user-facing message if the request fails.
  */
-export async function streamSearch(file, onEvent, query) {
-  const formData = new FormData();
-  formData.append("file", file);
-  if (query) formData.append("query", query);
-
-  const response = await fetch(`${API_URL}/api/v1/products/search-by-image/stream`, {
-    method: "POST",
-    body: formData,
-  });
-
+async function readEventStream(response, onEvent) {
   if (!response.ok) {
-    let detail = "Something went wrong while searching. Please try again.";
+    let detail = GENERIC_ERROR;
     try {
       const body = await response.json();
       detail = body.detail || body.message || detail;
     } catch {
       // Keep the default message for non-JSON responses.
     }
-    throw new Error(detail);
+    throw new Error(typeof detail === "string" ? detail : GENERIC_ERROR);
   }
 
   const reader = response.body.getReader();
@@ -49,4 +41,32 @@ export async function streamSearch(file, onEvent, query) {
   }
 
   handleLine(buffer + decoder.decode());
+}
+
+/**
+ * Run a streamed image search. An optional query (brand, model, colour…)
+ * narrows the Google Lens search for the same photo.
+ */
+export async function streamSearch(file, onEvent, query) {
+  const formData = new FormData();
+  formData.append("file", file);
+  if (query) formData.append("query", query);
+
+  const response = await fetch(`${API_URL}/api/v1/products/search-by-image/stream`, {
+    method: "POST",
+    body: formData,
+  });
+
+  await readEventStream(response, onEvent);
+}
+
+/** Run a streamed search for a typed product description. */
+export async function streamTextSearch(query, onEvent) {
+  const response = await fetch(`${API_URL}/api/v1/products/search-by-text/stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query }),
+  });
+
+  await readEventStream(response, onEvent);
 }

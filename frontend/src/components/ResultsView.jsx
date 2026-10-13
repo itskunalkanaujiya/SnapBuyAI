@@ -26,7 +26,7 @@ function Stat({ icon, label, value }) {
   );
 }
 
-function Toolbar({ filters, onChange, stores, shownCount, totalCount }) {
+function Toolbar({ filters, onChange, stores, shownCount, totalCount, hasMatchScores }) {
   const set = (key) => (event) => onChange({ ...filters, [key]: event.target.value });
   const active = hasActiveFilters(filters);
 
@@ -65,15 +65,17 @@ function Toolbar({ filters, onChange, stores, shownCount, totalCount }) {
         ))}
       </select>
 
-      <select className="field" value={filters.minMatch} onChange={set("minMatch")} aria-label="Minimum visual match">
-        <option value="any">Any match</option>
-        <option value="similar">Similar or closer</option>
-        <option value="close">Very close only</option>
-      </select>
+      {hasMatchScores && (
+        <select className="field" value={filters.minMatch} onChange={set("minMatch")} aria-label="Minimum visual match">
+          <option value="any">Any match</option>
+          <option value="similar">Similar or closer</option>
+          <option value="close">Very close only</option>
+        </select>
+      )}
 
       <select className="field" value={filters.sort} onChange={set("sort")} aria-label="Sort by">
         <option value="relevance">Sort: Recommended</option>
-        <option value="match">Sort: Best match</option>
+        {hasMatchScores && <option value="match">Sort: Best match</option>}
         <option value="price-low">Sort: Price, low to high</option>
         <option value="price-high">Sort: Price, high to low</option>
       </select>
@@ -201,6 +203,7 @@ export default function ResultsView({
   restoredAt,
   onSearchAgain,
   onRefine,
+  kind = "photo",
   query,
   bestMatches,
   cheapest,
@@ -238,6 +241,8 @@ export default function ResultsView({
         ? formatAmount(lowest.price, lowest.product.currency || "INR")
         : "—",
       inStock: allProducts.filter((product) => getAvailability(product) === "in_stock").length,
+      stores: new Set(allProducts.map((product) => product.marketplace)).size,
+      hasMatchScores: allProducts.some((product) => product.visual_similarity_score != null),
     };
   }, [allProducts]);
 
@@ -271,7 +276,8 @@ export default function ResultsView({
             <h2>
               {query ? (
                 <>
-                  Matches for <span className="query-chip">{query}</span>
+                  {kind === "text" ? "Results for" : "Matches for"}{" "}
+                  <span className="query-chip">{query}</span>
                 </>
               ) : (
                 "Matching products"
@@ -283,7 +289,7 @@ export default function ResultsView({
                   onClick={() => setIsRefining(true)}
                 >
                   <Icon name="pencil" size={14} />
-                  {query ? "Not quite? Refine" : "Describe it"}
+                  {kind === "text" ? "Edit search" : query ? "Not quite? Refine" : "Describe it"}
                 </button>
               )}
             </h2>
@@ -293,7 +299,11 @@ export default function ResultsView({
         <div className="stats">
           <Stat icon="layers" label="Listings" value={allProducts.length} />
           <Stat icon="trendDown" label="Lowest price" value={stats.lowest} />
-          <Stat icon="box" label="In stock" value={stats.inStock} />
+          {kind === "text" ? (
+            <Stat icon="store" label="Stores" value={stats.stores} />
+          ) : (
+            <Stat icon="box" label="In stock" value={stats.inStock} />
+          )}
         </div>
       </div>
 
@@ -314,6 +324,7 @@ export default function ResultsView({
         stores={stores}
         shownCount={shownCount}
         totalCount={allProducts.length}
+        hasMatchScores={stats.hasMatchScores}
       />
 
       {shownCount === 0 ? (
@@ -330,9 +341,13 @@ export default function ResultsView({
       ) : (
         <>
           <Section
-            icon="scan"
-            title="Best matches"
-            subtitle="Listings that look most like your photo."
+            icon={kind === "text" ? "search" : "scan"}
+            title={kind === "text" ? "Top results" : "Best matches"}
+            subtitle={
+              kind === "text"
+                ? "The most relevant listings for your search."
+                : "Listings that look most like your photo."
+            }
             products={filteredBest}
             savedIds={savedIds}
             onToggleSave={onToggleSave}
@@ -340,7 +355,11 @@ export default function ResultsView({
           <Section
             icon="tag"
             title="Lowest prices"
-            subtitle="The cheapest listings we found, in-stock items first."
+            subtitle={
+              kind === "text"
+                ? "The cheapest listings that match your search."
+                : "The cheapest listings we found, in-stock items first."
+            }
             products={filteredCheapest}
             savedIds={savedIds}
             onToggleSave={onToggleSave}

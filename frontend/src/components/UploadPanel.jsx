@@ -79,6 +79,7 @@ function formatFileSize(bytes) {
 }
 
 export default function UploadPanel({
+  modeTabs,
   file,
   previewUrl,
   isSearching,
@@ -124,6 +125,8 @@ export default function UploadPanel({
 
   return (
     <div className="panel search-panel">
+      {modeTabs}
+
       <div className="panel-header">
         <div>
           <h2>Search by photo</h2>

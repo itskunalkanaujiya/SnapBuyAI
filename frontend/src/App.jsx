@@ -5,6 +5,7 @@ import Icon, { Logo } from "./components/Icon.jsx";
 import Landing from "./components/Landing.jsx";
 import ProductCard from "./components/ProductCard.jsx";
 import RecentSearches from "./components/RecentSearches.jsx";
+import TextSearchPanel, { SearchModeTabs } from "./components/TextSearchPanel.jsx";
 import ResultsView, { ResultsLoading } from "./components/ResultsView.jsx";
 import UploadPanel from "./components/UploadPanel.jsx";
 import {
@@ -15,7 +16,7 @@ import {
   writeHistory,
 } from "./lib/history.js";
 import { prepareForUpload } from "./lib/resizeImage.js";
-import { streamSearch } from "./lib/searchStream.js";
+import { streamSearch, streamTextSearch } from "./lib/searchStream.js";
 import {
   ALLOWED_IMAGE_TYPES,
   DEFAULT_FILTERS,
@@ -48,8 +49,10 @@ const STORES = ["Amazon.in", "Flipkart", "Myntra", "AJIO", "Meesho", "Tata CLiQ"
 // Search stages reported by the backend, in order (see UploadPanel).
 const STAGE = { uploading: 0, identifying: 1, ranking: 2, checking: 3 };
 
-function toResults(data) {
+// kind: "photo" (Google Lens + CLIP) or "text" (Google Shopping).
+function toResults(data, kind = "photo") {
   return {
+    kind,
     query: data.online_search_query || "",
     bestMatches: Array.isArray(data.best_matches) ? data.best_matches : [],
     cheapest: Array.isArray(data.cheapest_alternatives) ? data.cheapest_alternatives : [],
@@ -69,6 +72,8 @@ export default function App() {
   const [highlightPanel, setHighlightPanel] = useState(false);
 
   const [view, setView] = useState("discover");
+  const [mode, setMode] = useState("photo");
+  const [textQuery, setTextQuery] = useState("");
   const [file, setFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState("");
   // The uploaded photo before any crop, so a crop can be redone or undone.
@@ -160,6 +165,7 @@ export default function App() {
     }
 
     setError("");
+    setMode("photo");
     setOriginalFile(nextFile);
     setOriginalUrl(URL.createObjectURL(nextFile));
     showImage(nextFile);
@@ -187,22 +193,50 @@ export default function App() {
 
   // Reopen a recent search: its photo and results, without searching again.
   function openRecent(entry) {
+    setError("");
+    setFilters(DEFAULT_FILTERS);
+    setView("discover");
+    scrolledRef.current = false;
+
+    if (entry.kind === "text") {
+      setMode("text");
+      setTextQuery(entry.query);
+      setResults({ ...entry.results, kind: "text", restoredAt: entry.savedAt });
+      return;
+    }
+
     const restored = dataUrlToFile(entry.image, entry.fileName);
 
-    setError("");
+    setMode("photo");
     setOriginalFile(restored);
     setOriginalUrl(URL.createObjectURL(restored));
     setFile(restored);
     setPreviewUrl(URL.createObjectURL(restored));
-    setFilters(DEFAULT_FILTERS);
-    setView("discover");
-    scrolledRef.current = false;
-    setResults({ ...entry.results, restoredAt: entry.savedAt });
+    setResults({ ...entry.results, kind: "photo", restoredAt: entry.savedAt });
+  }
+
+  function rememberTextSearch(finalResults) {
+    setHistory((current) =>
+      addToHistory(current, {
+        id: String(Date.now()),
+        kind: "text",
+        query: finalResults.query,
+        image: null,
+        savedAt: Date.now(),
+        results: finalResults,
+      })
+    );
+  }
+
+  function changeMode(nextMode) {
+    setMode(nextMode);
+    setError("");
   }
 
   function rememberSearch(searchedFile, finalResults) {
     const entry = {
       id: String(Date.now()),
+      kind: "photo",
       query: finalResults.query,
       fileName: searchedFile.name,
       savedAt: Date.now(),
@@ -257,7 +291,7 @@ export default function App() {
   function goToSearch() {
     panelRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     panelRef.current
-      ?.querySelector(".dropzone, .search-button")
+      ?.querySelector(".dropzone, .text-search-field input, .search-button")
       ?.focus({ preventScroll: true });
     setHighlightPanel(true);
     setTimeout(() => setHighlightPanel(false), 1600);
@@ -301,7 +335,7 @@ export default function App() {
           case "preview":
             // Show ranked listings now; prices and stock fill in later.
             advanceStage(STAGE.checking);
-            setResults(toResults(event));
+            setResults(toResults(event, "photo"));
             break;
           case "final":
             finalData = event;
@@ -317,7 +351,7 @@ export default function App() {
         throw new Error("The search ended unexpectedly. Please try again.");
       }
 
-      const finalResults = toResults(finalData);
+      const finalResults = toResults(finalData, "photo");
 
       if (finalResults.bestMatches.length + finalResults.cheapest.length === 0) {
         setResults(null);
@@ -345,6 +379,61 @@ export default function App() {
       setIsComplete(false);
     }
   }
+
+  // Search Google Shopping for a typed description.
+  async function searchText(text) {
+    const query = (typeof text === "string" ? text : textQuery).trim();
+
+    if (query.length < 2) {
+      setError("Type at least 2 characters to search.");
+      return;
+    }
+
+    setMode("text");
+    setTextQuery(query);
+    setError("");
+    setResults(null);
+    setFilters(DEFAULT_FILTERS);
+    scrolledRef.current = false;
+    setIsSearching(true);
+
+    let finalData = null;
+
+    try {
+      await streamTextSearch(query, (event) => {
+        if (event.type === "final") finalData = event;
+        if (event.type === "error") {
+          throw new Error(event.detail || "Search failed. Please try again.");
+        }
+      });
+
+      if (!finalData) {
+        throw new Error("The search ended unexpectedly. Please try again.");
+      }
+
+      const finalResults = toResults(finalData, "text");
+
+      if (finalResults.bestMatches.length + finalResults.cheapest.length === 0) {
+        setError(`No products found for "${query}". Try different or fewer words.`);
+        return;
+      }
+
+      setResults(finalResults);
+      rememberTextSearch(finalResults);
+    } catch (searchError) {
+      setError(
+        searchError instanceof TypeError
+          ? "Can't reach the SnapBuy server. Check that the backend is running."
+          : searchError.message
+      );
+    } finally {
+      setIsSearching(false);
+    }
+  }
+
+  const modeTabs = (
+    <SearchModeTabs mode={mode} onChange={changeMode} disabled={isSearching} />
+  );
 
   return (
     <div className="app">
@@ -396,9 +485,9 @@ export default function App() {
                   </h1>
 
                   <p className="hero-lead">
-                    Upload a picture and SnapBuy identifies the product, finds
-                    matching listings across online stores and shows you where
-                    it's cheapest.
+                    Upload a picture — or just type what you're looking for —
+                    and SnapBuy finds matching listings across online stores
+                    and shows you where it's cheapest.
                   </p>
 
                   <ul className="feature-list">
@@ -417,23 +506,35 @@ export default function App() {
                   ref={panelRef}
                   className={`hero-visual ${highlightPanel ? "is-highlighted" : ""}`}
                 >
-                <UploadPanel
-                  file={file}
-                  previewUrl={previewUrl}
-                  isSearching={isSearching}
-                  isComplete={isComplete}
-                  elapsed={elapsed}
-                  stage={stage}
-                  stageElapsed={stageElapsed}
-                  identifiedQuery={identifiedQuery}
-                  error={error}
-                  onSelect={selectImage}
-                  onRemove={removeImage}
-                  isCropped={Boolean(file && originalFile && file !== originalFile)}
-                  onCrop={() => setIsCropping(true)}
-                  onUndoCrop={undoCrop}
-                  onSearch={search}
-                />
+                {mode === "photo" ? (
+                  <UploadPanel
+                    modeTabs={modeTabs}
+                    file={file}
+                    previewUrl={previewUrl}
+                    isSearching={isSearching}
+                    isComplete={isComplete}
+                    elapsed={elapsed}
+                    stage={stage}
+                    stageElapsed={stageElapsed}
+                    identifiedQuery={identifiedQuery}
+                    error={error}
+                    onSelect={selectImage}
+                    onRemove={removeImage}
+                    isCropped={Boolean(file && originalFile && file !== originalFile)}
+                    onCrop={() => setIsCropping(true)}
+                    onUndoCrop={undoCrop}
+                    onSearch={search}
+                  />
+                ) : (
+                  <TextSearchPanel
+                    modeTabs={modeTabs}
+                    query={textQuery}
+                    onQueryChange={setTextQuery}
+                    onSearch={searchText}
+                    isSearching={isSearching}
+                    error={error}
+                  />
+                )}
                 </div>
               </div>
 
@@ -455,8 +556,11 @@ export default function App() {
               <ResultsView
                 isUpdating={isSearching}
                 restoredAt={results.restoredAt}
-                onSearchAgain={() => search()}
-                onRefine={search}
+                kind={results.kind}
+                onSearchAgain={() =>
+                  results.kind === "text" ? searchText(results.query) : search()
+                }
+                onRefine={results.kind === "text" ? searchText : search}
                 query={results.query}
                 bestMatches={results.bestMatches}
                 cheapest={results.cheapest}

@@ -29,8 +29,11 @@ export function writeHistory(entries) {
 function isSameSearch(a, b) {
   return (
     a.id === b.id ||
-    a.image === b.image ||
-    (Boolean(a.query) && a.query === b.query && a.fileName === b.fileName)
+    (Boolean(a.image) && a.image === b.image) ||
+    (Boolean(a.query) &&
+      (a.kind || "photo") === (b.kind || "photo") &&
+      a.query.toLowerCase() === (b.query || "").toLowerCase() &&
+      a.fileName === b.fileName)
   );
 }
 

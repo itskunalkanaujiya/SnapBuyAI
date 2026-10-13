@@ -38,6 +38,8 @@ export default function ProductCard({ product, isSaved, onToggleSave, highlight 
   const price = formatPrice(product);
   const store = product.marketplace || "Online store";
   const name = product.name || "Unnamed product";
+  // Google Shopping results link to Google's page listing the stores.
+  const isShopping = product.result_type === "shopping";
 
   return (
     <article className="card">
@@ -89,22 +91,41 @@ export default function ProductCard({ product, isSaved, onToggleSave, highlight 
         <div className="card-store">
           <StoreIcon product={product} />
           <span>{store}</span>
+          {product.multiple_sources && <span className="more-stores">+ more stores</span>}
         </div>
 
         <h3 className="card-title" title={name}>
           {name}
         </h3>
 
+        {product.rating ? (
+          <div className="card-rating" aria-label={`Rated ${product.rating} out of 5`}>
+            <span className="star" aria-hidden="true">★</span>
+            {Number(product.rating).toFixed(1)}
+            {product.reviews ? (
+              <span className="reviews">({Number(product.reviews).toLocaleString("en-IN")})</span>
+            ) : null}
+          </div>
+        ) : null}
+
         <div className="card-meta">
           {price ? (
-            <span className="card-price">{price}</span>
+            <span className="card-price">
+              {price}
+              {product.original_price_text && (
+                <s className="card-original-price" aria-label={`was ${product.original_price_text}`}>
+                  {product.original_price_text}
+                </s>
+              )}
+            </span>
           ) : product.pending ? (
             <span className="card-price is-missing is-pending">Checking price…</span>
           ) : (
             <span className="card-price is-missing">Price on store</span>
           )}
 
-          {product.pending && availability === "unknown" ? (
+          {isShopping && availability === "unknown" ? null : product.pending &&
+            availability === "unknown" ? (
             <span className="stock stock-pending">Checking stock</span>
           ) : (
             <span className={`stock stock-${availability}`}>
@@ -120,7 +141,7 @@ export default function ProductCard({ product, isSaved, onToggleSave, highlight 
             target="_blank"
             rel="noopener noreferrer"
           >
-            View on store
+            {isShopping ? "Compare offers" : "View on store"}
             <Icon name="external" size={15} />
           </a>
         ) : (

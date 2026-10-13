@@ -34,6 +34,11 @@ const FAQS = [
       "Your photo is sent to Google Lens, which finds visually similar listings across the web. SnapBuy keeps the shopping results, ranks them with an AI image model by how closely they match your photo, and reads each listing's price and stock.",
   },
   {
+    question: "Can I search without a photo?",
+    answer:
+      "Yes. Switch the search panel to Text and type what you're looking for, like \"Casio G-Shock green watch\". SnapBuy searches Google Shopping across Indian stores and shows the top results and the lowest prices, with ratings and discounts where stores list them.",
+  },
+  {
     question: "Which stores does it search?",
     answer:
       "Any online store Google Lens finds — often Amazon, Flipkart, Myntra, AJIO, Meesho and Tata CLiQ, plus many smaller shops. Results are tuned for India.",

@@ -835,6 +835,110 @@ kbd {
   height: 46px;
 }
 
+/* ---------- Photo / Text search ---------- */
+
+.mode-tabs {
+  display: grid;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-sunken);
+  gap: 4px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.mode-tab {
+  display: inline-flex;
+  height: 38px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-2);
+  font-size: 14px;
+  font-weight: 600;
+  gap: 8px;
+  transition:
+    background-color 0.15s var(--ease),
+    color 0.15s var(--ease),
+    box-shadow 0.15s var(--ease);
+}
+
+.mode-tab:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.mode-tab.is-active {
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  color: var(--primary-text);
+}
+
+.mode-tab:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.text-search {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.text-search-field {
+  position: relative;
+  height: 54px;
+  padding-right: 6px;
+  border-radius: var(--radius);
+  font-size: 16px;
+}
+
+.text-search-clear {
+  width: 32px;
+  height: 32px;
+}
+
+.text-examples {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  color: var(--text-3);
+  font-size: 12.5px;
+  gap: 8px;
+}
+
+.example-chip {
+  padding: 6px 11px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 12.5px;
+  font-weight: 500;
+  transition:
+    border-color 0.15s var(--ease),
+    color 0.15s var(--ease),
+    background-color 0.15s var(--ease);
+}
+
+.example-chip:hover:not(:disabled) {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary-text);
+}
+
+.recent-text-icon {
+  display: grid;
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--primary-soft);
+  color: var(--primary-text);
+}
+
 /* ---------- Recent searches ---------- */
 
 .recent {
@@ -1372,6 +1476,38 @@ label.field input::placeholder {
   -webkit-line-clamp: 2;
   line-clamp: 2;
   line-height: 1.4;
+}
+
+.more-stores {
+  flex-shrink: 0;
+  color: var(--text-3);
+  font-weight: 500;
+}
+
+.card-rating {
+  display: flex;
+  align-items: center;
+  color: var(--text-2);
+  font-size: 12.5px;
+  font-weight: 600;
+  gap: 4px;
+}
+
+.card-rating .star {
+  color: #f5a524;
+}
+
+.card-rating .reviews {
+  color: var(--text-3);
+  font-weight: 500;
+}
+
+.card-original-price {
+  margin-left: 6px;
+  color: var(--text-3);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
 }
 
 .card-meta {

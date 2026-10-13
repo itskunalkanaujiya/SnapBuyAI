@@ -35,7 +35,13 @@ export default function RecentSearches({ entries, onOpen, onRemove, onClear }) {
         {entries.map((entry) => (
           <li key={entry.id} className="recent-item">
             <button type="button" className="recent-open" onClick={() => onOpen(entry)}>
-              <img src={entry.image} alt="" />
+              {entry.image ? (
+                <img src={entry.image} alt="" />
+              ) : (
+                <span className="recent-text-icon" aria-hidden="true">
+                  <Icon name="search" size={20} />
+                </span>
+              )}
               <span className="recent-text">
                 <strong>{entry.query || "Product search"}</strong>
                 <span>{summarize(entry.results)}</span>

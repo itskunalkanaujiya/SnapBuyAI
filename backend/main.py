@@ -15,12 +15,14 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from PIL import Image, UnidentifiedImageError
+from pydantic import BaseModel
 
 from image_shopping_service import (
     identify_product,
     load_clip_model,
     search_products_by_image as search_online_products,
 )
+from text_shopping_service import search_products_by_text as search_shopping_text
 
 # --------------------------------------------------
 # 1. Create the FastAPI application
@@ -527,6 +529,21 @@ async def search_products_by_image_stream(
     if cached is None:
         check_search_limit(request)
 
+    return stream_search_response(
+        cache_key,
+        cached,
+        first_stage="identifying",
+        run=lambda emit: run_search(image, on_event=emit, query=query),
+    )
+
+
+def stream_search_response(cache_key, cached, first_stage, run):
+    """
+    Stream a search as newline-delimited JSON events.
+
+    run(emit) performs the blocking search in a worker thread and returns the
+    service result; emit(event_type, payload) sends progress events.
+    """
     loop = asyncio.get_running_loop()
     queue = asyncio.Queue()
     done = object()
@@ -538,10 +555,8 @@ async def search_products_by_image_stream(
 
     def worker():
         try:
-            emit("stage", {"stage": "identifying"})
-            response = build_search_response(
-                run_search(image, on_event=emit, query=query)
-            )
+            emit("stage", {"stage": first_stage})
+            response = build_search_response(run(emit))
             cache_if_useful(cache_key, response)
             emit("final", {**response, "cached": False})
         except Exception as exc:
@@ -570,4 +585,68 @@ async def search_products_by_image_stream(
         events(),
         media_type="application/x-ndjson",
         headers={"Cache-Control": "no-store"},
+    )
+
+
+# --------------------------------------------------
+# 12. Search by typed text (Google Shopping)
+# --------------------------------------------------
+
+
+class TextSearchRequest(BaseModel):
+    query: str
+
+
+def text_query_or_400(body: TextSearchRequest) -> str:
+    query = clean_query(body.query)
+    if not query or len(query) < 2:
+        raise HTTPException(
+            status_code=400,
+            detail="Type at least 2 characters to search.",
+        )
+    return query
+
+
+def text_cache_key(query: str) -> str:
+    return f"text:{query.lower()}"
+
+
+@app.post("/api/v1/products/search-by-text")
+async def search_products_by_text(request: Request, body: TextSearchRequest):
+    query = text_query_or_400(body)
+    cache_key = text_cache_key(query)
+
+    cached = get_cached_search(cache_key)
+    if cached is not None:
+        print("Search served from cache.")
+        return {**cached, "cached": True}
+
+    check_search_limit(request)
+
+    try:
+        online_results = await run_in_threadpool(search_shopping_text, query, 10)
+    except Exception as exc:
+        print(f"Text search failed: {exc}")
+        raise HTTPException(status_code=502, detail=ONLINE_SEARCH_ERROR)
+
+    response = build_search_response(online_results)
+    cache_if_useful(cache_key, response)
+    return {**response, "cached": False}
+
+
+@app.post("/api/v1/products/search-by-text/stream")
+async def search_products_by_text_stream(request: Request, body: TextSearchRequest):
+    """Same as /search-by-text, streamed like the photo search (stage, final, error)."""
+    query = text_query_or_400(body)
+    cache_key = text_cache_key(query)
+
+    cached = get_cached_search(cache_key)
+    if cached is None:
+        check_search_limit(request)
+
+    return stream_search_response(
+        cache_key,
+        cached,
+        first_stage="searching",
+        run=lambda emit: search_shopping_text(query, 10),
     )

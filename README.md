@@ -1,13 +1,22 @@
 # SnapBuy AI
 
-Upload a photo of a product and SnapBuy AI finds matching listings across
-online stores in India, with prices and stock availability.
+Upload a photo of a product — or type what you're looking for — and SnapBuy
+AI finds matching listings across online stores in India, with prices and
+stock availability.
 
 - **Best matches**: listings that look most like your photo
 - **Lowest prices**: the cheapest listings, in-stock items first
 - **Saved items**: keep listings in your browser to compare later
 
 ## How it works
+
+**Text search** sends the typed query to Google Shopping (through SerpApi):
+top results keep Google's relevance order, and Lowest Prices are the
+cheapest listings that still contain most of the query's words. Listings
+show ratings and original prices where stores provide them, and link to
+Google Shopping's page comparing the stores that sell the item.
+
+**Photo search:**
 
 1. The photo is sent to **Google Lens** (through [SerpApi](https://serpapi.com/google-lens-api)).
    No search text is needed — Lens identifies the product, and SnapBuy builds
@@ -25,6 +34,7 @@ online stores in India, with prices and stock availability.
 backend/                     FastAPI server
   main.py                    API endpoints, upload validation, result cache
   image_shopping_service.py  Google Lens search, ranking, price and stock extraction
+  text_shopping_service.py   Google Shopping search for typed queries
   requirements.txt
   .env.example               Copy to .env and add your SerpApi key
 frontend/                    React 19 + Vite app
@@ -97,6 +107,8 @@ host.
 |---|---|---|
 | `POST` | `/api/v1/products/search-by-image` | Upload an image (`file`, JPEG/PNG/WebP, max 8 MB) and optionally a `query` (up to 100 characters, e.g. a brand or model) to narrow the Lens search; returns `best_matches` and `cheapest_alternatives` |
 | `POST` | `/api/v1/products/search-by-image/stream` | Same search as newline-delimited JSON events: `stage`, `identified`, `preview` (ranked listings with Google Lens prices; `pending: true` while a seller page is still being checked), then `final` (same body as above) or `error`. Used by the web app. |
+| `POST` | `/api/v1/products/search-by-text` | JSON body `{"query": "..."}` (2–100 characters); searches Google Shopping and returns the same sections as the photo search |
+| `POST` | `/api/v1/products/search-by-text/stream` | Same, streamed as `stage` then `final` (or `error`) events |
 | `POST` | `/api/v1/products/recognize-image` | Identify the product only; returns the derived query and top Lens titles |
 | `GET` | `/health` | Health check |
 
