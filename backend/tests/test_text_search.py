@@ -29,20 +29,27 @@ def fake_shopping(monkeypatch):
     return calls
 
 
-def test_keeps_only_priced_listings_with_links(fake_shopping):
+def test_keeps_only_relevant_priced_listings(fake_shopping):
     result = t.search_products_by_text(QUERY, max_results=10)
     products = result["best_matches"] + result["cheapest_alternatives"]
+    names = [p["name"] for p in products]
 
     assert result["online_search_query"] == QUERY
-    assert len(result["best_matches"]) == 10
     assert all(p["price"] and p["product_url"] and p["currency"] == "INR" for p in products)
-    # The two sample entries without a price or link are dropped.
-    assert not any(p["name"].startswith("GA-B010-3A") for p in products)
+    assert all(p["text_relevance_score"] >= t.MIN_RELEVANCE for p in products)
+    # G-Shock listings are kept, including ones that don't say "watch"...
+    assert "Casio G-Shock Men's Mudmaster GWG-1000-1A3ER" in names
+    # ...but a different Casio line, and entries without a price, are not.
+    assert "Casio Men EDIFICE" not in names
+    assert not any(n.startswith("GA-B010-3A |") for n in names)
 
 
 def test_best_matches_keep_google_order(fake_shopping):
     best = t.search_products_by_text(QUERY, max_results=3)["best_matches"]
-    assert [p["marketplace"] for p in best] == ["clesso.co.in", "BlackTree", "FancyAdda"]
+    assert [p["marketplace"] for p in best] == ["clesso.co.in", "FancyAdda", "ubuy.co.in"][:2] + [best[2]["marketplace"]]
+    order = [item.get("title") for item in SAMPLE["shopping_results"]]
+    positions = [order.index(p["name"]) for p in best]
+    assert positions == sorted(positions)
 
 
 def test_cheapest_are_sorted_and_relevant(fake_shopping):
@@ -51,7 +58,7 @@ def test_cheapest_are_sorted_and_relevant(fake_shopping):
     prices = [p["price"] for p in cheapest]
 
     assert prices == sorted(prices)
-    assert all(p["text_relevance_score"] >= t.MIN_QUERY_OVERLAP for p in cheapest)
+    assert all(p["text_relevance_score"] >= t.MIN_RELEVANCE for p in cheapest)
     best_urls = {p["product_url"] for p in result["best_matches"]}
     assert not best_urls & {p["product_url"] for p in cheapest}
 
@@ -85,9 +92,81 @@ def test_old_price_ignored_unless_higher():
     assert t.build_shopping_product(item, "x")["original_price"] is None
 
 
-def test_query_overlap():
-    assert t.query_overlap("Casio G-Shock GA-2100 Green Watch", "casio green watch") == 1.0
-    assert t.query_overlap("Silicone strap", "casio green watch") == 0.0
+def test_relevance_basics():
+    assert t.relevance("Casio G-Shock GA-2100 Green Watch", "casio green watch") == 1.0
+    assert t.relevance("Silicone strap", "casio green watch") == 0.0
+
+
+@pytest.mark.parametrize(
+    "title, query, relevant",
+    [
+        # Plurals and possessives match.
+        ("Women's Pure Cotton Kurtis", "cotton kurti for women", True),
+        ("Nike Men Quest 6 Running Shoe", "Nike running shoes for men", True),
+        # Synonyms for the product type.
+        ("boAt Airdopes 71 Gen 2 TWS 45h Battery", "boAt wireless earbuds", True),
+        ("Max Women Solid Straight Kurta", "cotton kurti for women", True),
+        # The product type itself must match.
+        ("Nike Pegasus Premium", "Nike running shoes for men", False),
+        ("boAt Rockerz 450 Headphones", "boAt wireless earbuds", False),
+        # Accessories for the product, unless asked for.
+        ("Silicone Strap for Casio G-Shock Watch", "casio g-shock watch", False),
+        ("Clear Case Cover for iPhone 15", "iphone 15", False),
+        ("Silicone Strap for Casio G-Shock Watch", "casio g-shock watch strap for", True),
+        # A transparent charging case is part of the product, not an accessory.
+        ("boAt Nirvana Crystl, Transparent Case, Spatial Audio TWS", "boAt wireless earbuds", True),
+        # Model words (hyphenated names, numbers) must match.
+        ("Casio Enticer Men Green Stainless Steel Watch", "casio g-shock green watch", False),
+        ("Casio G-Shock Men's Mudmaster GWG-1000", "casio g-shock green watch", True),
+        ("G SHOCK GA2100 METAL MENS WATCH", "casio g-shock watch", True),
+        ("Apple iPhone 14 128GB Midnight", "iphone 15", False),
+        ("Apple iPhone 15 (128 GB) - Black", "iphone 15", True),
+        # Sets and combos, unless asked for.
+        ("Women's Cotton Kurta Set with Palazzo & Dupatta", "cotton kurti for women", False),
+        ("Women's Cotton Kurta Set with Palazzo & Dupatta", "cotton kurta set", True),
+    ],
+)
+def test_relevance_rules(title, query, relevant):
+    assert (t.relevance(title, query) >= t.MIN_RELEVANCE) is relevant
+
+
+def shopping_item(title, price, source="Store", link=None):
+    return {
+        "title": title,
+        "source": source,
+        "price": f"₹{price}",
+        "extracted_price": price,
+        "product_link": link or f"https://www.google.com/shopping/{abs(hash((title, source, price)))}",
+    }
+
+
+def test_duplicates_imports_and_price_outliers(monkeypatch):
+    items = [
+        shopping_item("boAt Airdopes 141 Wireless Earbuds", 1099, "Flipkart"),
+        shopping_item("boAt Airdopes 141 Wireless Earbuds (Black)", 1099, "Flipkart"),  # duplicate
+        shopping_item("boAt Airdopes 311 Pro Wireless Earbuds", 17753, "desertcart.in"),  # import
+        shopping_item("boAt Airdopes 161 Wireless Earbuds", 899, "Amazon.in"),
+        shopping_item("boAt Airdopes 181 Pro Wireless Earbuds", 1399, "Myntra"),
+        shopping_item("boAt Airdopes 131 Wireless Earbuds", 999, "AJIO"),
+        shopping_item("boAt Airdopes 91 Wireless Earbuds", 129, "Shady Store"),  # too cheap
+        shopping_item("boAt Airdopes 213 Wireless Earbuds", 4599, "Overpriced"),  # too pricey
+        shopping_item("Silicone Case for boAt Wireless Earbuds", 199, "Accessories"),  # accessory
+    ]
+    monkeypatch.setattr(t, "run_google_shopping", lambda query: items)
+
+    result = t.search_products_by_text("boAt wireless earbuds", max_results=3)
+    names = lambda section: [p["name"] for p in result[section]]
+
+    all_names = names("best_matches") + names("cheapest_alternatives")
+    assert "boAt Airdopes 141 Wireless Earbuds (Black)" not in all_names
+    assert "Silicone Case for boAt Wireless Earbuds" not in all_names
+    assert names("best_matches") == [
+        "boAt Airdopes 141 Wireless Earbuds",
+        "boAt Airdopes 161 Wireless Earbuds",
+        "boAt Airdopes 181 Pro Wireless Earbuds",
+    ]
+    # Lowest prices: no import, nothing absurdly cheap or far above typical.
+    assert names("cheapest_alternatives") == ["boAt Airdopes 131 Wireless Earbuds"]
 
 
 @pytest.fixture
