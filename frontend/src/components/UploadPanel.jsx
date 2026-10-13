@@ -1,30 +1,24 @@
 import { useRef, useState } from "react";
 import Icon from "./Icon.jsx";
 
-// Each step starts once overall progress reaches this percentage.
+// One step per search stage reported by the backend. Within a stage the
+// bar eases from `from` towards `to` (it never stalls, never overshoots);
+// `seconds` is the stage's typical length, which sets the easing speed.
 const SEARCH_STEPS = [
-  { label: "Uploading your photo", startsAt: 0 },
-  { label: "Identifying the product", startsAt: 12 },
-  { label: "Finding matching listings", startsAt: 40 },
-  { label: "Comparing prices and stock", startsAt: 70 },
+  { label: "Uploading your photo", from: 0, to: 9, seconds: 1 },
+  { label: "Identifying the product", from: 10, to: 44, seconds: 5 },
+  { label: "Finding matching listings", from: 45, to: 74, seconds: 2 },
+  { label: "Comparing prices and stock", from: 75, to: 97, seconds: 2.5 },
 ];
 
-// The server does not report progress, so estimate it from elapsed time.
-// The curve eases towards 95% (about 60% at 9s, 85% at 18s) and never
-// stalls; the final stretch to 100% happens when the results arrive.
-const PROGRESS_TIME_CONSTANT = 9;
-
-function estimateProgress(elapsedSeconds) {
-  return 95 * (1 - Math.exp(-elapsedSeconds / PROGRESS_TIME_CONSTANT));
+function stageProgress(stage, stageElapsed) {
+  const step = SEARCH_STEPS[stage];
+  return step.from + (step.to - step.from) * (1 - Math.exp(-stageElapsed / step.seconds));
 }
 
-function SearchProgress({ elapsed, isComplete }) {
-  const progress = isComplete ? 100 : estimateProgress(elapsed);
-
-  let current = 0;
-  SEARCH_STEPS.forEach((step, index) => {
-    if (progress >= step.startsAt) current = index;
-  });
+function SearchProgress({ stage, stageElapsed, isComplete, identifiedQuery }) {
+  const progress = isComplete ? 100 : stageProgress(stage, stageElapsed);
+  const current = stage;
 
   return (
     <div className="search-progress">
@@ -43,6 +37,13 @@ function SearchProgress({ elapsed, isComplete }) {
       >
         <span className="progress-fill" style={{ width: `${progress}%` }} />
       </div>
+
+      {identifiedQuery && (
+        <p className="progress-identified">
+          <Icon name="scan" size={14} />
+          Identified as <strong>{identifiedQuery}</strong>
+        </p>
+      )}
 
       <ol className="progress-steps">
         {SEARCH_STEPS.map((step, index) => {
@@ -83,6 +84,9 @@ export default function UploadPanel({
   isSearching,
   isComplete,
   elapsed,
+  stage,
+  stageElapsed,
+  identifiedQuery,
   error,
   onSelect,
   onRemove,
@@ -139,7 +143,12 @@ export default function UploadPanel({
 
           <div className="preview-side">
             {isSearching ? (
-              <SearchProgress elapsed={elapsed} isComplete={isComplete} />
+              <SearchProgress
+                stage={stage}
+                stageElapsed={stageElapsed}
+                isComplete={isComplete}
+                identifiedQuery={identifiedQuery}
+              />
             ) : (
               <>
                 <div className="file-chip">

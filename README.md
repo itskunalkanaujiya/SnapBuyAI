@@ -66,6 +66,7 @@ Open http://127.0.0.1:5173. To point the app at a different backend, set
 | Method | Path | Description |
 |---|---|---|
 | `POST` | `/api/v1/products/search-by-image` | Upload an image (`file`, JPEG/PNG/WebP, max 8 MB); returns `best_matches` and `cheapest_alternatives` |
+| `POST` | `/api/v1/products/search-by-image/stream` | Same search as newline-delimited JSON events: `stage`, `identified`, `preview` (ranked listings with Google Lens prices; `pending: true` while a seller page is still being checked), then `final` (same body as above) or `error`. Used by the web app. |
 | `POST` | `/api/v1/products/recognize-image` | Identify the product only; returns the derived query and top Lens titles |
 | `GET` | `/health` | Health check |
 

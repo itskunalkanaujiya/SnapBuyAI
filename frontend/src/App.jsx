@@ -6,9 +6,9 @@ import Landing from "./components/Landing.jsx";
 import ProductCard from "./components/ProductCard.jsx";
 import ResultsView, { ResultsLoading } from "./components/ResultsView.jsx";
 import UploadPanel from "./components/UploadPanel.jsx";
+import { streamSearch } from "./lib/searchStream.js";
 import {
   ALLOWED_IMAGE_TYPES,
-  API_URL,
   DEFAULT_FILTERS,
   MAX_IMAGE_SIZE,
   getProductId,
@@ -36,6 +36,24 @@ const FEATURES = [
 // Stores that regularly appear in SnapBuy results, shown as plain text.
 const STORES = ["Amazon.in", "Flipkart", "Myntra", "AJIO", "Meesho", "Tata CLiQ", "IndiaMART"];
 
+// Search stages reported by the backend, in order (see UploadPanel).
+const STAGE = { uploading: 0, identifying: 1, ranking: 2, checking: 3 };
+
+function toResults(data) {
+  return {
+    query: data.online_search_query || "",
+    bestMatches: Array.isArray(data.best_matches) ? data.best_matches : [],
+    cheapest: Array.isArray(data.cheapest_alternatives) ? data.cheapest_alternatives : [],
+  };
+}
+
+// Preview listings can be "pending" (price or stock still being checked).
+function clearPending(results) {
+  if (!results) return results;
+  const settle = (products) => products.map((product) => ({ ...product, pending: false }));
+  return { ...results, bestMatches: settle(results.bestMatches), cheapest: settle(results.cheapest) };
+}
+
 export default function App() {
   const resultsRef = useRef(null);
   const panelRef = useRef(null);
@@ -51,6 +69,12 @@ export default function App() {
   const [isSearching, setIsSearching] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
   const [elapsed, setElapsed] = useState(0);
+  const [stage, setStage] = useState(STAGE.uploading);
+  const [stageElapsed, setStageElapsed] = useState(0);
+  const [identifiedQuery, setIdentifiedQuery] = useState("");
+  const stageRef = useRef(STAGE.uploading);
+  const stageStartedAtRef = useRef(0);
+  const scrolledRef = useRef(false);
   const [error, setError] = useState("");
 
   const [results, setResults] = useState(null);
@@ -84,16 +108,29 @@ export default function App() {
     if (!isSearching) return undefined;
 
     const startedAt = Date.now();
-    const timer = setInterval(() => setElapsed((Date.now() - startedAt) / 1000), 250);
+    const timer = setInterval(() => {
+      const now = Date.now();
+      setElapsed((now - startedAt) / 1000);
+      setStageElapsed((now - stageStartedAtRef.current) / 1000);
+    }, 250);
     return () => clearInterval(timer);
   }, [isSearching]);
 
-  // Bring new results into view once they arrive.
+  // Bring results into view the first time they appear for a search.
   useEffect(() => {
-    if (results && !isSearching) {
+    if (results && !scrolledRef.current) {
+      scrolledRef.current = true;
       resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }
-  }, [results, isSearching]);
+  }, [results]);
+
+  function advanceStage(next) {
+    if (next <= stageRef.current) return;
+    stageRef.current = next;
+    stageStartedAtRef.current = Date.now();
+    setStage(next);
+    setStageElapsed(0);
+  }
 
   function selectImage(nextFile) {
     if (!nextFile) return;
@@ -167,7 +204,7 @@ export default function App() {
     setSaved((current) =>
       current.some((item) => getProductId(item) === id)
         ? current.filter((item) => getProductId(item) !== id)
-        : [...current, product]
+        : [...current, { ...product, pending: false }]
     );
   }
 
@@ -191,51 +228,62 @@ export default function App() {
     setResults(null);
     setFilters(DEFAULT_FILTERS);
     setElapsed(0);
+    setIdentifiedQuery("");
+    stageRef.current = STAGE.uploading;
+    stageStartedAtRef.current = Date.now();
+    setStage(STAGE.uploading);
+    setStageElapsed(0);
+    scrolledRef.current = false;
     setIsSearching(true);
 
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
+    let finalData = null;
 
-      const response = await fetch(`${API_URL}/api/v1/products/search-by-image`, {
-        method: "POST",
-        body: formData,
+    try {
+      await streamSearch(file, (event) => {
+        switch (event.type) {
+          case "stage":
+            advanceStage(STAGE.identifying);
+            break;
+          case "identified":
+            setIdentifiedQuery(event.online_search_query || "");
+            advanceStage(STAGE.ranking);
+            break;
+          case "preview":
+            // Show ranked listings now; prices and stock fill in later.
+            advanceStage(STAGE.checking);
+            setResults(toResults(event));
+            break;
+          case "final":
+            finalData = event;
+            break;
+          case "error":
+            throw new Error(event.detail || "Search failed. Please try again.");
+          default:
+            break;
+        }
       });
 
-      if (!response.ok) {
-        let detail = "Something went wrong while searching. Please try again.";
-        try {
-          const body = await response.json();
-          detail = body.detail || body.message || detail;
-        } catch {
-          // Keep the default message for non-JSON responses.
-        }
-        throw new Error(detail);
+      if (!finalData) {
+        throw new Error("The search ended unexpectedly. Please try again.");
       }
 
-      const data = await response.json();
-      const bestMatches = Array.isArray(data.best_matches) ? data.best_matches : [];
-      const cheapest = Array.isArray(data.cheapest_alternatives)
-        ? data.cheapest_alternatives
-        : [];
+      const finalResults = toResults(finalData);
 
-      if (bestMatches.length + cheapest.length === 0) {
+      if (finalResults.bestMatches.length + finalResults.cheapest.length === 0) {
+        setResults(null);
         setError(
           "We couldn't find this product online. Try a clearer photo where the product fills most of the frame."
         );
         return;
       }
 
-      // Let the progress bar finish before the results replace it.
+      // Let the progress bar finish, then settle the final prices and stock.
       setIsComplete(true);
       await new Promise((resolve) => setTimeout(resolve, PROGRESS_FINISH_MS));
-
-      setResults({
-        query: data.online_search_query || "",
-        bestMatches,
-        cheapest,
-      });
+      setResults(finalResults);
     } catch (searchError) {
+      // Keep any preview results, but stop showing them as "checking".
+      setResults(clearPending);
       setError(
         searchError instanceof TypeError
           ? "Can't reach the SnapBuy server. Check that the backend is running."
@@ -324,6 +372,9 @@ export default function App() {
                   isSearching={isSearching}
                   isComplete={isComplete}
                   elapsed={elapsed}
+                  stage={stage}
+                  stageElapsed={stageElapsed}
+                  identifiedQuery={identifiedQuery}
                   error={error}
                   onSelect={selectImage}
                   onRemove={removeImage}
@@ -347,10 +398,11 @@ export default function App() {
 
             <div ref={resultsRef} className="results-anchor" />
 
-            {isSearching && <ResultsLoading />}
+            {isSearching && !results && <ResultsLoading />}
 
-            {results && !isSearching && (
+            {results && (
               <ResultsView
+                isUpdating={isSearching}
                 query={results.query}
                 bestMatches={results.bestMatches}
                 cheapest={results.cheapest}

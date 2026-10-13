@@ -2,7 +2,9 @@ from collections import OrderedDict
 from contextlib import asynccontextmanager, contextmanager
 from io import BytesIO
 from pathlib import Path
+import asyncio
 import hashlib
+import json
 import tempfile
 import threading
 import time
@@ -10,6 +12,7 @@ import time
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from PIL import Image, UnidentifiedImageError
 
 from image_shopping_service import (
@@ -300,39 +303,18 @@ def store_cached_search(key, result):
 # --------------------------------------------------
 
 
-@app.post("/api/v1/products/search-by-image")
-async def search_products_by_image(file: UploadFile = File(...)):
-    # Step 1: Validate and read the uploaded image.
-    image = await read_uploaded_image(file)
-
-    cache_key = await run_in_threadpool(image_fingerprint, image)
-    cached = get_cached_search(cache_key)
-
-    if cached is not None:
-        print("Search served from cache.")
-        return {**cached, "cached": True}
-
-    # Step 2: Search online. Google Lens identifies the product itself,
-    # and the search query is derived from its results.
-    def search(image):
-        with lens_ready_image(image) as image_path:
-            return search_online_products(
-                image_path=image_path,
-                max_results=10,
-            )
-
-    try:
-        # Run the blocking work off the event loop so other requests
-        # are still served while a search is in progress.
-        online_results = await run_in_threadpool(search, image)
-
-    except Exception as exc:
-        print(f"Online product search failed: {exc}")
-        raise HTTPException(
-            status_code=502,
-            detail=ONLINE_SEARCH_ERROR,
+def run_search(image: Image.Image, on_event=None) -> dict:
+    """Run the full online search for an image (blocking)."""
+    with lens_ready_image(image) as image_path:
+        return search_online_products(
+            image_path=image_path,
+            max_results=10,
+            on_event=on_event,
         )
 
+
+def build_search_response(online_results: dict) -> dict:
+    """Shape the service result into the API response."""
     best_matches = online_results.get("best_matches", [])
     cheapest_alternatives = online_results.get("cheapest_alternatives", [])
     query = online_results.get("online_search_query", "")
@@ -344,8 +326,7 @@ async def search_products_by_image(file: UploadFile = File(...)):
     if not isinstance(cheapest_alternatives, list):
         cheapest_alternatives = []
 
-    # Step 3: Return both online sections.
-    response = {
+    return {
         "category": query,
         # Online visual matches.
         "best_matches": best_matches,
@@ -364,9 +345,112 @@ async def search_products_by_image(file: UploadFile = File(...)):
         ),
     }
 
+
+def cache_if_useful(cache_key, response):
     # Only cache searches that found something, so a temporary Lens
     # failure is retried next time.
-    if best_matches or cheapest_alternatives:
+    if response["best_matches"] or response["cheapest_alternatives"]:
         store_cached_search(cache_key, response)
 
+
+@app.post("/api/v1/products/search-by-image")
+async def search_products_by_image(file: UploadFile = File(...)):
+    # Step 1: Validate and read the uploaded image.
+    image = await read_uploaded_image(file)
+
+    cache_key = await run_in_threadpool(image_fingerprint, image)
+    cached = get_cached_search(cache_key)
+
+    if cached is not None:
+        print("Search served from cache.")
+        return {**cached, "cached": True}
+
+    # Step 2: Search online. Google Lens identifies the product itself,
+    # and the search query is derived from its results.
+    try:
+        # Run the blocking work off the event loop so other requests
+        # are still served while a search is in progress.
+        online_results = await run_in_threadpool(run_search, image)
+
+    except Exception as exc:
+        print(f"Online product search failed: {exc}")
+        raise HTTPException(
+            status_code=502,
+            detail=ONLINE_SEARCH_ERROR,
+        )
+
+    # Step 3: Return both online sections.
+    response = build_search_response(online_results)
+    cache_if_useful(cache_key, response)
+
     return {**response, "cached": False}
+
+
+# --------------------------------------------------
+# 10. Streamed search: show results as they become ready
+# --------------------------------------------------
+
+
+@app.post("/api/v1/products/search-by-image/stream")
+async def search_products_by_image_stream(file: UploadFile = File(...)):
+    """
+    Same search, streamed as newline-delimited JSON events:
+
+        {"type": "stage", "stage": "identifying"}   search started
+        {"type": "identified", "online_search_query": ...}
+        {"type": "preview", "best_matches": [...], "cheapest_alternatives": [...],
+         "online_search_query": ...}                 ranked, prices from Lens
+        {"type": "final", ...same body as /search-by-image...}
+        {"type": "error", "detail": ...}
+
+    Preview listings with "pending": true are still having their price or
+    stock checked; the final event replaces them.
+    """
+    # Validation errors are returned as normal HTTP errors before streaming.
+    image = await read_uploaded_image(file)
+
+    cache_key = await run_in_threadpool(image_fingerprint, image)
+    cached = get_cached_search(cache_key)
+
+    loop = asyncio.get_running_loop()
+    queue = asyncio.Queue()
+    done = object()
+
+    def emit(event_type, payload=None):
+        # Called from the worker thread; hand events to the event loop.
+        event = {"type": event_type, **(payload or {})}
+        loop.call_soon_threadsafe(queue.put_nowait, event)
+
+    def worker():
+        try:
+            emit("stage", {"stage": "identifying"})
+            response = build_search_response(run_search(image, on_event=emit))
+            cache_if_useful(cache_key, response)
+            emit("final", {**response, "cached": False})
+        except Exception as exc:
+            print(f"Online product search failed: {exc}")
+            emit("error", {"detail": ONLINE_SEARCH_ERROR})
+        finally:
+            loop.call_soon_threadsafe(queue.put_nowait, done)
+
+    async def events():
+        if cached is not None:
+            print("Search served from cache.")
+            yield json.dumps({"type": "final", **cached, "cached": True}) + "\n"
+            return
+
+        task = loop.run_in_executor(None, worker)
+
+        while True:
+            event = await queue.get()
+            if event is done:
+                break
+            yield json.dumps(event) + "\n"
+
+        await task
+
+    return StreamingResponse(
+        events(),
+        media_type="application/x-ndjson",
+        headers={"Cache-Control": "no-store"},
+    )

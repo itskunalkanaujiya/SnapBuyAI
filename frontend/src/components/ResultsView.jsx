@@ -142,6 +142,7 @@ export function ResultsLoading() {
 }
 
 export default function ResultsView({
+  isUpdating,
   query,
   bestMatches,
   cheapest,
@@ -214,6 +215,13 @@ export default function ResultsView({
           <Stat icon="box" label="In stock" value={stats.inStock} />
         </div>
       </div>
+
+      {isUpdating && (
+        <div className="updating-banner" role="status">
+          <span className="spinner" />
+          Checking prices and stock at each store — listings will update in a moment.
+        </div>
+      )}
 
       <Toolbar
         filters={filters}

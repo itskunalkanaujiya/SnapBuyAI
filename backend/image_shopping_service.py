@@ -1154,12 +1154,18 @@ def finish_page_details(job):
 # --------------------------------------------------
 
 
-def build_product(item):
-    """Convert a raw search result into the frontend product format."""
+def build_product(item, pending=False):
+    """
+    Convert a raw search result into the frontend product format.
+
+    pending marks a preview listing whose seller page is still being checked,
+    so its price or stock may still change.
+    """
     offer = item["_offer"]
     visual_score = item.get("_visual_similarity_score")
 
     return {
+        "pending": pending,
         "name": item.get("title") or "Unknown product",
         "price": offer["price"],
         "price_text": offer["price_text"],
@@ -1176,6 +1182,58 @@ def build_product(item):
             if visual_score is not None
             else "Text-ranked visual candidate"
         ),
+    }
+
+
+def select_sections(candidates, max_results, preview=False):
+    """
+    Resolve offers, filter, and pick the Best Matches and Cheapest
+    Alternatives sections from candidates already ranked by similarity.
+
+    In a preview, seller pages have not been read yet: listings that still
+    need them are marked pending.
+    """
+    for item in candidates:
+        item["_offer"] = resolve_offer(item)
+
+    # Drop non-product pages and listings that cannot be bought in rupees.
+    kept = [
+        item
+        for item in candidates
+        if looks_like_product_page(item) and is_available_in_india(item)
+    ]
+
+    def product(item):
+        return build_product(item, pending=preview and needs_page_details(item))
+
+    # Best Matches: prioritize visual similarity and title relevance.
+    best_items = kept[:max_results]
+
+    # Cheapest Alternatives: only products with known prices can be sorted
+    # reliably. Out-of-stock listings go last, and listings already shown
+    # in Best Matches are not repeated.
+    best_urls = {normalize_product_url(item.get("link")) for item in best_items}
+
+    alternative_items = [
+        item
+        for item in kept
+        if item["_offer"]["price"] is not None
+        and normalize_product_url(item.get("link")) not in best_urls
+    ]
+
+    alternative_items.sort(
+        key=lambda item: (
+            item["_offer"]["availability"] == OUT_OF_STOCK,
+            item["_offer"]["price"],
+        )
+    )
+
+    return {
+        "best_matches": [product(item) for item in best_items],
+        "cheapest_alternatives": [
+            product(item) for item in alternative_items[:max_results]
+        ],
+        "filtered_count": len(candidates) - len(kept),
     }
 
 
@@ -1314,9 +1372,17 @@ def identify_product(image_path: str | Path) -> dict:
 def search_products_by_image(
     image_path: str | Path,
     max_results: int = 10,
+    on_event=None,
 ) -> dict:
     """
     Search Google Lens and return two separate sections.
+
+    on_event(event_type, payload), if given, is called as the search
+    progresses so results can be shown early:
+        "identified" {"online_search_query"}            after Google Lens
+        "preview"    {"best_matches", "cheapest_alternatives",
+                      "online_search_query"}             after CLIP ranking,
+                                                         before seller pages
 
     Returns:
         {
@@ -1335,9 +1401,18 @@ def search_products_by_image(
 
     started = time.monotonic()
 
+    def emit(event_type, payload):
+        if on_event is not None:
+            try:
+                on_event(event_type, payload)
+            except Exception as exc:
+                print(f"Search event handler failed: {exc}")
+
     candidates = run_google_lens(image_path)
     query = derive_product_query(candidates)
     lens_done = time.monotonic()
+
+    emit("identified", {"online_search_query": query})
 
     if not candidates:
         return {
@@ -1392,6 +1467,18 @@ def search_products_by_image(
         reverse=True,
     )
 
+    # Show ranked results with Google Lens prices while seller pages load.
+    if on_event is not None:
+        preview = select_sections(candidates, max_results, preview=True)
+        emit(
+            "preview",
+            {
+                "best_matches": preview["best_matches"],
+                "cheapest_alternatives": preview["cheapest_alternatives"],
+                "online_search_query": query,
+            },
+        )
+
     # Read price and stock from seller pages where Lens lacks them.
     finish_page_details(page_job)
     pages_done = time.monotonic()
@@ -1404,44 +1491,11 @@ def search_products_by_image(
         f"({len(candidates)} candidates)"
     )
 
-    for item in candidates:
-        item["_offer"] = resolve_offer(item)
+    sections = select_sections(candidates, max_results)
+    print(f"Filtered {sections['filtered_count']} non-product or foreign listing(s).")
 
-    # Drop non-product pages and listings that cannot be bought in rupees.
-    pool_size = len(candidates)
-    candidates = [
-        item
-        for item in candidates
-        if looks_like_product_page(item) and is_available_in_india(item)
-    ]
-    print(f"Filtered {pool_size - len(candidates)} non-product or foreign listing(s).")
-
-    # Best Matches: prioritize visual similarity and title relevance.
-    best_items = candidates[:max_results]
-    best_matches = [build_product(item) for item in best_items]
-
-    # Cheapest Alternatives: only products with known prices can be sorted
-    # reliably. Out-of-stock listings go last, and listings already shown
-    # in Best Matches are not repeated.
-    best_urls = {normalize_product_url(item.get("link")) for item in best_items}
-
-    alternative_items = [
-        item
-        for item in candidates
-        if item["_offer"]["price"] is not None
-        and normalize_product_url(item.get("link")) not in best_urls
-    ]
-
-    alternative_items.sort(
-        key=lambda item: (
-            item["_offer"]["availability"] == OUT_OF_STOCK,
-            item["_offer"]["price"],
-        )
-    )
-
-    cheapest_alternatives = [
-        build_product(item) for item in alternative_items[:max_results]
-    ]
+    best_matches = sections["best_matches"]
+    cheapest_alternatives = sections["cheapest_alternatives"]
 
     return {
         "best_matches": best_matches,

@@ -669,6 +669,28 @@ kbd {
   }
 }
 
+.progress-identified {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  color: var(--text-3);
+  font-size: 12.5px;
+  gap: 6px;
+}
+
+.progress-identified .icon {
+  color: var(--primary);
+}
+
+.progress-identified strong {
+  overflow: hidden;
+  color: var(--primary-text);
+  font-weight: 650;
+  text-overflow: ellipsis;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
 .progress-steps {
   display: grid;
   margin: 0;
@@ -1218,6 +1240,36 @@ label.field input::placeholder {
 .stock-unknown {
   background: var(--neutral-soft);
   color: var(--text-3);
+}
+
+.stock-pending {
+  background: var(--primary-soft);
+  color: var(--primary-text);
+}
+
+.stock-pending::before,
+.card-price.is-pending {
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.updating-banner {
+  display: flex;
+  align-items: center;
+  margin-bottom: 14px;
+  padding: 10px 14px;
+  border: 1px solid color-mix(in srgb, var(--primary) 22%, transparent);
+  border-radius: var(--radius);
+  background: var(--primary-soft);
+  color: var(--primary-text);
+  font-size: 13.5px;
+  font-weight: 500;
+  gap: 10px;
 }
 
 .card-cta {

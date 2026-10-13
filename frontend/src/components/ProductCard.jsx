@@ -94,13 +94,19 @@ export default function ProductCard({ product, isSaved, onToggleSave, highlight 
         <div className="card-meta">
           {price ? (
             <span className="card-price">{price}</span>
+          ) : product.pending ? (
+            <span className="card-price is-missing is-pending">Checking price…</span>
           ) : (
             <span className="card-price is-missing">Price on store</span>
           )}
 
-          <span className={`stock stock-${availability}`}>
-            {AVAILABILITY_LABELS[availability]}
-          </span>
+          {product.pending && availability === "unknown" ? (
+            <span className="stock stock-pending">Checking stock</span>
+          ) : (
+            <span className={`stock stock-${availability}`}>
+              {AVAILABILITY_LABELS[availability]}
+            </span>
+          )}
         </div>
 
         {product.product_url ? (
