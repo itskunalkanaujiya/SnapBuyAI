@@ -1,5 +1,6 @@
 import { useState } from "react";
 import Icon from "./Icon.jsx";
+import { canTryOn } from "../lib/tryon.js";
 import {
   AVAILABILITY_LABELS,
   formatPrice,
@@ -30,7 +31,7 @@ function StoreIcon({ product }) {
   );
 }
 
-export default function ProductCard({ product, isSaved, onToggleSave, highlight }) {
+export default function ProductCard({ product, isSaved, onToggleSave, onTryOn, highlight }) {
   const [imageFailed, setImageFailed] = useState(!product.image_url);
 
   const match = getMatchLevel(product);
@@ -79,6 +80,13 @@ export default function ProductCard({ product, isSaved, onToggleSave, highlight 
             </span>
           )}
         </div>
+
+        {onTryOn && canTryOn(product) && (
+          <button type="button" className="tryon-button" onClick={() => onTryOn(product)}>
+            <Icon name="shirt" size={14} />
+            Try on
+          </button>
+        )}
 
         <button
           type="button"

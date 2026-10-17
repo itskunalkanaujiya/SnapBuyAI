@@ -6,6 +6,7 @@ pillow==12.3.0
 requests==2.34.2
 beautifulsoup4==4.15.0
 python-dotenv==1.2.4
+gradio_client==2.7.2
 
 # AI visual re-ranking (CLIP). Large download; CPU-only works fine.
 torch==2.14.1

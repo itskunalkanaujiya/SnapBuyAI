@@ -6,6 +6,7 @@ import Landing from "./components/Landing.jsx";
 import ProductCard from "./components/ProductCard.jsx";
 import RecentSearches from "./components/RecentSearches.jsx";
 import TextSearchPanel, { SearchModeTabs } from "./components/TextSearchPanel.jsx";
+import TryOnDialog from "./components/TryOnDialog.jsx";
 import ResultsView, { ResultsLoading } from "./components/ResultsView.jsx";
 import UploadPanel from "./components/UploadPanel.jsx";
 import {
@@ -73,6 +74,7 @@ export default function App() {
 
   const [view, setView] = useState("discover");
   const [mode, setMode] = useState("photo");
+  const [tryOnProduct, setTryOnProduct] = useState(null);
   const [textQuery, setTextQuery] = useState("");
   const [file, setFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState("");
@@ -190,6 +192,7 @@ export default function App() {
   }
 
   const closeCrop = useCallback(() => setIsCropping(false), []);
+  const closeTryOn = useCallback(() => setTryOnProduct(null), []);
 
   // Reopen a recent search: its photo and results, without searching again.
   function openRecent(entry) {
@@ -568,6 +571,7 @@ export default function App() {
                 onFiltersChange={setFilters}
                 savedIds={savedIds}
                 onToggleSave={toggleSaved}
+                onTryOn={setTryOnProduct}
               />
             )}
 
@@ -621,6 +625,7 @@ export default function App() {
                     product={product}
                     isSaved
                     onToggleSave={toggleSaved}
+                    onTryOn={setTryOnProduct}
                   />
                 ))}
               </div>
@@ -637,6 +642,8 @@ export default function App() {
           onCancel={closeCrop}
         />
       )}
+
+      {tryOnProduct && <TryOnDialog product={tryOnProduct} onClose={closeTryOn} />}
 
       <footer className="site-footer">
         <div className="container footer-inner">

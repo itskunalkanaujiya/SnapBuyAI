@@ -16,9 +16,11 @@ def reset_server_state():
     """Each test starts with an empty cache and no recorded searches."""
     main._search_cache.clear()
     main._search_log.clear()
+    main._tryon_log.clear()
     yield
     main._search_cache.clear()
     main._search_log.clear()
+    main._tryon_log.clear()
 
 
 @pytest.fixture

@@ -10,6 +10,14 @@ stock availability.
 
 ## How it works
 
+**Virtual try-on** shows the user wearing a garment from the results. Clothing
+listings (tops, kurtis, shirts, bottoms, dresses) get a "Try on" button; the
+user adds a photo and the backend sends it with the product image to free
+try-on models on Hugging Face: [Leffa](https://huggingface.co/spaces/franciszzj/Leffa)
+(MIT) first, then [IDM-VTON](https://huggingface.co/spaces/yisol/IDM-VTON)
+(non-commercial) as a fallback for tops. A try-on takes about 20–40 seconds
+on Hugging Face's free GPU quota.
+
 **Text search** sends the typed query to Google Shopping (through SerpApi):
 top results keep Google's relevance order, and Lowest Prices are the
 cheapest listings that still contain most of the query's words. Listings
@@ -110,6 +118,7 @@ host.
 | `POST` | `/api/v1/products/search-by-text` | JSON body `{"query": "..."}` (2–100 characters); searches Google Shopping and returns the same sections as the photo search |
 | `POST` | `/api/v1/products/search-by-text/stream` | Same, streamed as `stage` then `final` (or `error`) events |
 | `POST` | `/api/v1/products/recognize-image` | Identify the product only; returns the derived query and top Lens titles |
+| `POST` | `/api/v1/tryon` | Multipart: `person` (photo), `garment_url` (product image), `category` (`upper_body`, `lower_body` or `dresses`, from the product's `tryon_category`), optional `garment_name`; returns a JPEG |
 | `GET` | `/health` | Health check |
 
 ## Notes
@@ -120,6 +129,10 @@ host.
   searches per 10 minutes; further searches get HTTP 429 with a `Retry-After`
   header. Change this with `SEARCH_LIMIT` and `SEARCH_WINDOW_SECONDS` in
   `backend/.env` (`SEARCH_LIMIT=0` turns it off).
+- Try-ons use Hugging Face's free ZeroGPU quota for the `HF_TOKEN` account
+  (locally, your `hf auth login`), limited to 5 per visitor per 10 minutes
+  (`TRYON_LIMIT` / `TRYON_WINDOW_SECONDS`). The public Spaces can be busy or
+  down; IDM-VTON is non-commercial, so use only Leffa for commercial use.
 - Match labels come from CLIP similarity: **Very close** (≥ 0.88, usually the
   same item), **Similar** (≥ 0.78) and **Related** (same kind of product).
   These thresholds were calibrated on real searches and live in

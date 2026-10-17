@@ -13,7 +13,7 @@ import time
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel
 
@@ -23,6 +23,7 @@ from image_shopping_service import (
     search_products_by_image as search_online_products,
 )
 from text_shopping_service import search_products_by_text as search_shopping_text
+from tryon_service import GARMENT_WORDS, TryOnError, try_on
 
 # --------------------------------------------------
 # 1. Create the FastAPI application
@@ -345,32 +346,32 @@ def client_address(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
-def check_search_limit(request: Request):
-    """Record a search for this client, or raise 429 if over the limit."""
-    if SEARCH_LIMIT <= 0:
+def enforce_limit(request: Request, usage_log, limit, window_seconds, noun):
+    """Record a request for this client, or raise 429 if over the limit."""
+    if limit <= 0:
         return
 
     client = client_address(request)
     now = time.monotonic()
 
     with _search_log_lock:
-        # Drop searches that have left the window (and idle clients).
-        for key in list(_search_log):
-            log = _search_log[key]
-            while log and now - log[0] > SEARCH_WINDOW_SECONDS:
+        # Drop requests that have left the window (and idle clients).
+        for key in list(usage_log):
+            log = usage_log[key]
+            while log and now - log[0] > window_seconds:
                 log.popleft()
             if not log:
-                del _search_log[key]
+                del usage_log[key]
 
-        log = _search_log.setdefault(client, deque())
+        log = usage_log.setdefault(client, deque())
 
-        if len(log) >= SEARCH_LIMIT:
-            retry_after = int(SEARCH_WINDOW_SECONDS - (now - log[0])) + 1
+        if len(log) >= limit:
+            retry_after = int(window_seconds - (now - log[0])) + 1
             minutes = max(1, round(retry_after / 60))
             raise HTTPException(
                 status_code=429,
                 detail=(
-                    f"You've reached the limit of {SEARCH_LIMIT} searches. "
+                    f"You've reached the limit of {limit} {noun}. "
                     f"Please try again in about {minutes} "
                     f"minute{'s' if minutes != 1 else ''}."
                 ),
@@ -378,6 +379,10 @@ def check_search_limit(request: Request):
             )
 
         log.append(now)
+
+
+def check_search_limit(request: Request):
+    enforce_limit(request, _search_log, SEARCH_LIMIT, SEARCH_WINDOW_SECONDS, "searches")
 
 
 # --------------------------------------------------
@@ -650,3 +655,64 @@ async def search_products_by_text_stream(request: Request, body: TextSearchReque
         first_stage="searching",
         run=lambda emit: search_shopping_text(query, 10),
     )
+
+
+# --------------------------------------------------
+# 13. Virtual try-on
+# --------------------------------------------------
+
+# Try-ons use the free Hugging Face GPU quota, so they have their own,
+# stricter limit. Repeating the same photo and garment is cached and free.
+TRYON_LIMIT = int(os.getenv("TRYON_LIMIT", "5"))
+TRYON_WINDOW_SECONDS = int(os.getenv("TRYON_WINDOW_SECONDS", "600"))
+_tryon_log = {}
+
+
+@app.post("/api/v1/tryon")
+async def virtual_try_on(
+    request: Request,
+    person: UploadFile = File(...),
+    garment_url: str = Form(...),
+    category: str = Form(...),
+    garment_name: str = Form(""),
+):
+    """
+    Render the uploaded person photo wearing a product's garment.
+
+    category is "upper_body", "lower_body" or "dresses" (the product's
+    tryon_category). Returns a JPEG image.
+    """
+    if category not in GARMENT_WORDS:
+        raise HTTPException(status_code=400, detail="This item can't be tried on.")
+
+    person_image = await read_uploaded_image(person)
+
+    fingerprint = await run_in_threadpool(image_fingerprint, person_image)
+    cache_key = f"tryon:{fingerprint}:{category}:{garment_url}"
+    cached = get_cached_search(cache_key)
+
+    if cached is None:
+        enforce_limit(request, _tryon_log, TRYON_LIMIT, TRYON_WINDOW_SECONDS, "try-ons")
+        try:
+            cached = await run_in_threadpool(
+                try_on, person_image, garment_url, category, garment_name[:200]
+            )
+        except TryOnError as exc:
+            raise HTTPException(status_code=503, detail=str(exc))
+        except Exception as exc:
+            print(f"Try-on failed: {exc}")
+            raise HTTPException(
+                status_code=503,
+                detail="The try-on service is busy right now. Please try again in a minute.",
+            )
+        store_cached_search(cache_key, cached)
+        was_cached = "false"
+    else:
+        was_cached = "true"
+
+    return Response(
+        content=cached,
+        media_type="image/jpeg",
+        headers={"Cache-Control": "no-store", "X-Tryon-Cached": was_cached},
+    )
+

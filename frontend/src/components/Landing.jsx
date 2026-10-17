@@ -39,6 +39,11 @@ const FAQS = [
       "Yes. Switch the search panel to Text and type what you're looking for, like \"Casio G-Shock green watch\". SnapBuy searches Google Shopping across Indian stores and shows the top results and the lowest prices, with ratings and discounts where stores list them.",
   },
   {
+    question: "Can I see how clothes look on me?",
+    answer:
+      "Yes. Tap \"Try on\" on any top, kurti, shirt, dress or bottom in your results, add a photo of yourself, and AI shows you wearing it in about 20–40 seconds. Use a clear, front-facing photo; a full-length one works best for long garments. Your photo is sent to free AI models on Hugging Face only to create the try-on, and is kept in your browser for next time.",
+  },
+  {
     question: "Which stores does it search?",
     answer:
       "Any online store Google Lens finds — often Amazon, Flipkart, Myntra, AJIO, Meesho and Tata CLiQ, plus many smaller shops. Results are tuned for India.",
