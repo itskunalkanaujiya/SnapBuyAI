@@ -147,3 +147,41 @@ def test_overlay_has_a_limit(client, fake_download, monkeypatch):
     assert client.get(OVERLAY, params={"url": IMAGE_URL, "category": "glasses"}).status_code == 200
     other = client.get(OVERLAY, params={"url": IMAGE_URL + "2", "category": "glasses"})
     assert other.status_code == 429
+
+
+def test_lens_centres_of_a_front_view():
+    cut = t.cut_out_product(glasses_photo(lens=(40, 40, 40)), "glasses")
+    left_x, left_y, right_x, right_y = t.lens_centres(cut)
+
+    assert 0.15 < left_x < 0.3 and 0.7 < right_x < 0.85
+    assert abs(left_y - 0.5) < 0.05 and abs(right_y - 0.5) < 0.05
+
+
+def test_angled_glasses_photos_are_refused():
+    # The far lens looks much narrower in an angled view.
+    image = Image.new("RGB", (300, 120), "white")
+    draw = ImageDraw.Draw(image)
+    draw.ellipse((20, 15, 150, 105), fill=(40, 40, 40))
+    draw.ellipse((190, 30, 240, 90), fill=(40, 40, 40))
+    draw.line((150, 50, 190, 50), fill="black", width=6)
+    cut = t.cut_out_product(image, "glasses")
+
+    with pytest.raises(t.TryOnError):
+        t.lens_centres(cut)
+
+
+def test_overlay_sends_lens_centres_and_caches_refusals(client, monkeypatch):
+    calls = []
+
+    def download(url):
+        calls.append(url)
+        return Image.effect_noise((200, 200), 100).convert("RGB") if "bad" in url else glasses_photo((40, 40, 40))
+
+    monkeypatch.setattr(t, "download_garment", download)
+    good = client.get(OVERLAY, params={"url": IMAGE_URL, "category": "glasses"})
+    assert len(good.headers["x-lens-centres"].split(",")) == 4
+
+    for _ in range(2):
+        bad = client.get(OVERLAY, params={"url": IMAGE_URL + "bad", "category": "glasses"})
+        assert bad.status_code == 422
+    assert len(calls) == 2

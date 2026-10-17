@@ -24,7 +24,11 @@ browser opens the camera and tracks the face or hand with
 (face and hand landmarks), and draws the product photo on top as you move:
 frames on the eyes, the watch on the wrist along the arm. The backend only
 removes the product photo's background (`/api/v1/tryon/overlay`); the camera
-feed never leaves the device. Users can also use a photo, adjust size and
+feed never leaves the device. Glasses are placed by matching the lens
+centres in the product photo to the pupils (iris tracking). The web app checks
+each listing's photo in the background and shows "Try live" only when it is
+usable: a plain background and, for glasses, a front view (angled photos and
+see-through frames on white are refused). Users can also use a photo, adjust size and
 position, and save a picture.
 
 **Text search** sends the typed query to Google Shopping (through SerpApi):

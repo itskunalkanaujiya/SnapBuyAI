@@ -13,8 +13,18 @@ const MODEL_URLS = {
     "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
 };
 
-// Face mesh points: face edges beside the eyes, and the eye corners.
-const FACE = { left: 127, right: 356, eyes: [33, 133, 263, 362] };
+// Face mesh points: iris centres, with the eye corners as a fallback.
+const FACE = { irises: [468, 473], eyes: [[33, 133], [263, 362]] };
+// Distance between lens centres relative to the distance between pupils
+// (frames are a little wider than the eyes), and how far the lens centre
+// sits below the pupil, as a share of the pupil distance.
+const LENS_SPREAD = 1.18;
+const LENS_DROP = 0.06;
+// Product photos checked at the same time, and their results.
+const MAX_CHECKS = 4;
+const overlays = new Map();
+const queue = [];
+let running = 0;
 // Hand points: wrist, index / middle / pinky knuckles.
 const HAND = { wrist: 0, index: 5, middle: 9, pinky: 17 };
 
@@ -25,8 +35,45 @@ export function canTryOnLive(product) {
   return Boolean(product?.ar_category && (product.tryon_image_url || product.image_url));
 }
 
-/** The product photo with its background removed, as an ImageBitmap. */
-export async function loadOverlay(product) {
+function runQueued(task) {
+  return new Promise((resolve, reject) => {
+    queue.push({ task, resolve, reject });
+    pump();
+  });
+}
+
+function pump() {
+  while (running < MAX_CHECKS && queue.length) {
+    const { task, resolve, reject } = queue.shift();
+    running += 1;
+    task()
+      .then(resolve, reject)
+      .finally(() => {
+        running -= 1;
+        pump();
+      });
+  }
+}
+
+/**
+ * The product photo with its background removed: { image, centres }, where
+ * centres are the lens centres for glasses ([lx, ly, rx, ry] as fractions).
+ * Shared between the card (which checks the photo is usable) and the dialog.
+ */
+export function loadOverlay(product) {
+  const key = `${product.ar_category}|${product.tryon_image_url || product.image_url}`;
+  if (!overlays.has(key)) {
+    const promise = runQueued(() => fetchOverlay(product));
+    // A failed connection may work later; a refused photo won't.
+    promise.catch((error) => {
+      if (error instanceof TypeError) overlays.delete(key);
+    });
+    overlays.set(key, promise);
+  }
+  return overlays.get(key);
+}
+
+async function fetchOverlay(product) {
   const params = new URLSearchParams({
     url: product.tryon_image_url || product.image_url,
     category: product.ar_category,
@@ -43,7 +90,9 @@ export async function loadOverlay(product) {
     }
     throw new Error(detail);
   }
-  return createImageBitmap(await response.blob());
+  const centres = response.headers.get("X-Lens-Centres")?.split(",").map(Number) || null;
+  const image = await createImageBitmap(await response.blob());
+  return { image, centres };
 }
 
 /** Load the face (glasses) or hand (watch) tracker. */
@@ -98,19 +147,22 @@ export function placement(category, landmarks, width, height, mirror, { size, li
   const at = (index) => point(landmarks, index, width, height, mirror);
 
   if (category === "glasses") {
-    let left = at(FACE.left);
-    let right = at(FACE.right);
+    let [left, right] =
+      landmarks.length > FACE.irises[1]
+        ? FACE.irises.map(at)
+        : FACE.eyes.map((corners) => average(corners.map(at)));
     if (right.x < left.x) [left, right] = [right, left];
 
-    const faceWidth = distance(left, right);
+    const pupils = distance(left, right);
     const angle = Math.atan2(right.y - left.y, right.x - left.x);
-    const eyes = average(FACE.eyes.map(at));
-    // `lift` moves the frame up or down the nose (perpendicular to the eyes).
-    const shift = -lift * faceWidth * 0.25;
+    const middle = average([left, right]);
+    // Down the nose, perpendicular to the eyes; `lift` moves the frame up.
+    const shift = (LENS_DROP - lift * 0.3) * pupils;
     return {
-      x: eyes.x - Math.sin(angle) * shift,
-      y: eyes.y + Math.cos(angle) * shift,
-      width: faceWidth * 1.02 * size,
+      x: middle.x - Math.sin(angle) * shift,
+      y: middle.y + Math.cos(angle) * shift,
+      // For glasses, width is the distance between the lens centres.
+      width: pupils * LENS_SPREAD * size,
       angle,
     };
   }
@@ -153,8 +205,22 @@ export function smooth(previous, next) {
   };
 }
 
-/** Draw the product photo at a placement. */
-export function drawProduct(context, overlay, category, place) {
+/** Draw the product photo ({ image, centres }) at a placement. */
+export function drawProduct(context, { image: overlay, centres }, category, place) {
+  if (category === "glasses" && centres) {
+    // Put the midpoint between the lens centres on the placement point.
+    const [leftX, leftY, rightX, rightY] = centres;
+    const scale = place.width / ((rightX - leftX) * overlay.width);
+    const anchorX = ((leftX + rightX) / 2) * overlay.width * scale;
+    const anchorY = ((leftY + rightY) / 2) * overlay.height * scale;
+    context.save();
+    context.translate(place.x, place.y);
+    context.rotate(place.angle);
+    context.drawImage(overlay, -anchorX, -anchorY, overlay.width * scale, overlay.height * scale);
+    context.restore();
+    return;
+  }
+
   let source = { x: 0, y: 0, width: overlay.width, height: overlay.height };
   let turn = 0;
 

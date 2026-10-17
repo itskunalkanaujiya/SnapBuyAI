@@ -67,6 +67,7 @@ app.add_middleware(
     allow_origin_regex=os.getenv("ALLOWED_ORIGIN_REGEX") or None,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Lens-Centres"],
 )
 
 
@@ -718,10 +719,15 @@ async def virtual_try_on(
 
 
 # Live try-on (sunglasses, watches) runs in the browser; it only needs the
-# product photo without its background. Cheap, but it fetches remote images,
-# so it is limited too.
-OVERLAY_LIMIT = int(os.getenv("OVERLAY_LIMIT", "40"))
+# product photo without its background. The web app checks every glasses and
+# watch listing in the results this way, so the limit is generous; it exists
+# because each check fetches a remote image. Results have their own cache so
+# they don't push searches out of the search cache.
+OVERLAY_LIMIT = int(os.getenv("OVERLAY_LIMIT", "150"))
+OVERLAY_CACHE_ENTRIES = 500
 _overlay_log = {}
+_overlay_cache = OrderedDict()
+_overlay_cache_lock = threading.Lock()
 
 
 @app.get("/api/v1/tryon/overlay")
@@ -735,25 +741,35 @@ async def try_on_overlay(request: Request, url: str, category: str):
     if len(url) > 2048:
         raise HTTPException(status_code=400, detail="This product image can't be used.")
 
-    cache_key = f"overlay:{category}:{url}"
-    cached = get_cached_search(cache_key)
+    cache_key = (category, url)
+    with _overlay_cache_lock:
+        cached = _overlay_cache.get(cache_key)
+        if cached is not None:
+            _overlay_cache.move_to_end(cache_key)
 
     if cached is None:
         enforce_limit(request, _overlay_log, OVERLAY_LIMIT, TRYON_WINDOW_SECONDS, "live try-ons")
         try:
             cached = await run_in_threadpool(product_overlay, url, category)
         except TryOnError as exc:
-            raise HTTPException(status_code=422, detail=str(exc))
+            cached = str(exc)
         except Exception as exc:
             print(f"Overlay failed: {exc}")
             raise HTTPException(
                 status_code=422,
                 detail="Couldn't prepare this product's photo. Try another listing.",
             )
-        store_cached_search(cache_key, cached)
+        # Unusable photos are cached too, so they aren't fetched again.
+        with _overlay_cache_lock:
+            _overlay_cache[cache_key] = cached
+            while len(_overlay_cache) > OVERLAY_CACHE_ENTRIES:
+                _overlay_cache.popitem(last=False)
 
-    return Response(
-        content=cached,
-        media_type="image/png",
-        headers={"Cache-Control": "public, max-age=86400"},
-    )
+    if isinstance(cached, str):
+        raise HTTPException(status_code=422, detail=cached)
+
+    png, centres = cached
+    headers = {"Cache-Control": "public, max-age=86400"}
+    if centres:
+        headers["X-Lens-Centres"] = ",".join(f"{value:.4f}" for value in centres)
+    return Response(content=png, media_type="image/png", headers=headers)

@@ -19,6 +19,7 @@ import tempfile
 from pathlib import Path
 from urllib.parse import urlparse
 
+import numpy as np
 import requests
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageOps
 
@@ -83,6 +84,10 @@ BACKGROUND_TOLERANCE = 32  # colour distance still counted as background
 MIN_PLAIN_BORDER = 0.6  # share of the border that must be plain background
 MIN_LENS_AREA = 0.015  # enclosed areas this big (share of image) are clear lenses
 MIN_GLASSES_RATIO = 1.25  # glasses photos are wide; taller ones show a model
+# In a front view both lenses look alike; in an angled view the far lens is
+# narrower and shorter. Clear frames on white also fail this, as their cut-out
+# is patchy.
+MIN_LENS_SYMMETRY = 0.85
 
 
 class TryOnError(Exception):
@@ -278,15 +283,74 @@ def cut_out_product(image, category):
     return product
 
 
+NOT_FRONT_VIEW = (
+    "This listing's photo isn't a clear front view of the glasses, so it can't "
+    "be placed on you. Try another listing."
+)
+
+
+def lens_centres(product):
+    """
+    Find the centre of each lens in a glasses cut-out, as fractions of its
+    width and height: (left_x, left_y, right_x, right_y).
+
+    The bridge is the thinnest column in the middle; on each side, columns
+    with at least half the most coverage are the lens (temple arms are thin
+    and drop out). Raises TryOnError for photos that aren't a front view.
+    """
+    alpha = np.asarray(product.getchannel("A")) > 128
+    height, width = alpha.shape
+    columns = alpha.sum(axis=0).astype(float)
+
+    low, high = int(width * 0.3), int(width * 0.7)
+    if high <= low:
+        raise TryOnError(NOT_FRONT_VIEW)
+    bridge = low + int(np.argmin(columns[low:high]))
+
+    lenses = []
+    for start, end in ((0, bridge), (bridge + 1, width)):
+        side = columns[start:end]
+        if not side.size or side.max() == 0:
+            raise TryOnError(NOT_FRONT_VIEW)
+        is_lens = side >= side.max() * 0.5
+        xs = np.arange(start, end)[is_lens]
+        weights = side[is_lens]
+        rows = np.nonzero(alpha[:, xs])[0]
+        top, bottom = np.percentile(rows, [3, 97])
+        lenses.append({
+            "x": float((xs * weights).sum() / weights.sum()),
+            "y": float(top + bottom) / 2,
+            "width": float(xs.max() - xs.min() + 1),
+            "height": float(bottom - top + 1),
+        })
+
+    left, right = lenses
+    for key in ("width", "height"):
+        if min(left[key], right[key]) / max(left[key], right[key]) < MIN_LENS_SYMMETRY:
+            raise TryOnError(NOT_FRONT_VIEW)
+
+    return (
+        left["x"] / width,
+        left["y"] / height,
+        right["x"] / width,
+        right["y"] / height,
+    )
+
+
 def product_overlay(image_url, category):
-    """Download a glasses or watch photo and return it as a cut-out PNG."""
+    """
+    Download a glasses or watch photo and return (PNG bytes, lens centres).
+
+    Lens centres (see lens_centres) are None for watches.
+    """
     if category not in ("glasses", "watch"):
         raise TryOnError("This item can't be tried on live.")
 
     cut_out = cut_out_product(download_garment(image_url), category)
+    centres = lens_centres(cut_out) if category == "glasses" else None
     output = io.BytesIO()
     cut_out.save(output, format="PNG", optimize=True)
-    return output.getvalue()
+    return output.getvalue(), centres
 
 
 # --------------------------------------------------

@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Icon from "./Icon.jsx";
 import { canTryOn } from "../lib/tryon.js";
-import { canTryOnLive } from "../lib/liveTryOn.js";
+import { canTryOnLive, loadOverlay } from "../lib/liveTryOn.js";
 import {
   AVAILABILITY_LABELS,
   formatPrice,
@@ -32,8 +32,30 @@ function StoreIcon({ product }) {
   );
 }
 
+// Live try-on only looks right with a clean product photo (a front view for
+// glasses), so the photo is checked before the button is shown.
+function useLiveReady(product, enabled) {
+  const [ready, setReady] = useState(false);
+  const live = enabled && canTryOnLive(product);
+
+  useEffect(() => {
+    if (!live) return undefined;
+    let active = true;
+    loadOverlay(product).then(
+      () => active && setReady(true),
+      () => active && setReady(false)
+    );
+    return () => {
+      active = false;
+    };
+  }, [live, product]);
+
+  return live && ready;
+}
+
 export default function ProductCard({ product, isSaved, onToggleSave, onTryOn, highlight }) {
   const [imageFailed, setImageFailed] = useState(!product.image_url);
+  const liveReady = useLiveReady(product, Boolean(onTryOn));
 
   const match = getMatchLevel(product);
   const availability = getAvailability(product);
@@ -82,15 +104,15 @@ export default function ProductCard({ product, isSaved, onToggleSave, onTryOn, h
           )}
         </div>
 
-        {onTryOn && (canTryOnLive(product) || canTryOn(product)) && (
+        {onTryOn && (liveReady || (!product.ar_category && canTryOn(product))) && (
           <button
             type="button"
             className="tryon-button"
             onClick={() => onTryOn(product)}
-            title={canTryOnLive(product) ? "Try it on live with your camera" : "See it on your photo"}
+            title={liveReady ? "Try it on live with your camera" : "See it on your photo"}
           >
-            <Icon name={canTryOnLive(product) ? "camera" : "shirt"} size={14} />
-            {canTryOnLive(product) ? "Try live" : "Try on"}
+            <Icon name={liveReady ? "camera" : "shirt"} size={14} />
+            {liveReady ? "Try live" : "Try on"}
           </button>
         )}
 
