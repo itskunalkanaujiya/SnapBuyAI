@@ -140,6 +140,104 @@ function buildGlasses(overlay) {
   return { glasses, front, temples, hinge };
 }
 
+/**
+ * Build glasses from the frame description read from an angled product
+ * photo: lens outline, rim thickness and colours. Same layout as
+ * buildGlasses (1 unit = distance between the lens centres).
+ */
+function buildFrameModel(description) {
+  const lensWidth = 0.74;
+  const rim = description.rim * lensWidth;
+  const outline = description.lens.map(([x, y]) => new THREE.Vector2(x * lensWidth, y * lensWidth));
+  const halfWidth = 0.5 + lensWidth / 2 + rim;
+  const bend = FRONT_BEND * halfWidth * 2;
+  const top = Math.max(...outline.map((p) => p.y));
+
+  const frameMaterial = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(description.frame),
+    roughness: 0.35,
+    metalness: 0.1,
+    transparent: description.clear_frame,
+    opacity: description.clear_frame ? 0.72 : 1,
+  });
+  const lensMaterial = description.lens_tint
+    ? new THREE.MeshStandardMaterial({
+        color: new THREE.Color(description.lens_tint),
+        roughness: 0.08,
+        metalness: 0.3,
+        transparent: true,
+        opacity: 0.86,
+      })
+    : new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.05, transparent: true, opacity: 0.1 });
+
+  // Curve the front so the ends sweep back around the face.
+  const curve = (geometry) => {
+    const position = geometry.attributes.position;
+    for (let i = 0; i < position.count; i += 1) {
+      const x = position.getX(i) / halfWidth;
+      position.setZ(i, position.getZ(i) - bend * x * x);
+    }
+    position.needsUpdate = true;
+    geometry.computeVertexNormals();
+    return geometry;
+  };
+
+  const glasses = new THREE.Group();
+  for (const side of [-1, 1]) {
+    // The outline's +x is the nose side; mirror it for each lens.
+    const place = (p) => new THREE.Vector2(side * 0.5 - side * p.x, p.y);
+    const inner = outline.map(place);
+    const outer = outline.map((p) => {
+      const length = p.length() || 1;
+      return place(p.clone().multiplyScalar((length + rim) / length));
+    });
+
+    const ring = new THREE.Shape(outer);
+    ring.holes.push(new THREE.Path([...inner].reverse()));
+    const rimGeometry = new THREE.ExtrudeGeometry(ring, {
+      depth: rim * 0.7,
+      bevelEnabled: true,
+      bevelThickness: rim * 0.25,
+      bevelSize: rim * 0.2,
+      bevelSegments: 2,
+      curveSegments: 1,
+    });
+    rimGeometry.translate(0, 0, -rim * 0.35);
+    const rimMesh = new THREE.Mesh(curve(rimGeometry), frameMaterial);
+    rimMesh.renderOrder = 2;
+    glasses.add(rimMesh);
+
+    const lens = new THREE.Mesh(curve(new THREE.ShapeGeometry(new THREE.Shape(inner), 1)), lensMaterial);
+    lens.renderOrder = 3;
+    glasses.add(lens);
+  }
+
+  // Bridge: a slight arch between the lenses, near the top.
+  const bridgeY = top * 0.45;
+  const innerEdge = 0.5 - lensWidth / 2 - rim * 0.3;
+  const bridgePath = new THREE.QuadraticBezierCurve3(
+    new THREE.Vector3(-innerEdge, bridgeY, 0),
+    new THREE.Vector3(0, bridgeY + rim * 2.5, rim),
+    new THREE.Vector3(innerEdge, bridgeY, 0)
+  );
+  const bridge = new THREE.Mesh(
+    new THREE.TubeGeometry(bridgePath, 12, Math.max(rim * 0.45, 0.012), 8),
+    frameMaterial
+  );
+  bridge.renderOrder = 2;
+  glasses.add(bridge);
+
+  const temples = [-1, 1].map((side) => {
+    const temple = new THREE.Mesh(new THREE.BoxGeometry(rim * 0.6 + 0.02, rim * 1.1 + 0.04, 1), frameMaterial);
+    temple.renderOrder = 1;
+    glasses.add(temple);
+    return { side, mesh: temple };
+  });
+
+  const hinge = { x: halfWidth - rim * 0.5, y: top * 0.55, z: -bend * 0.96 };
+  return { glasses, temples, hinge, solid: true };
+}
+
 function placeTemples(model, faceHalfWidth, templeLength) {
   for (const { side, mesh } of model.temples) {
     const start = new THREE.Vector3(side * model.hinge.x, model.hinge.y, model.hinge.z);
@@ -269,7 +367,9 @@ export function createTryOn3d(category, overlay) {
   let model;
   let head = null;
   if (category === "glasses") {
-    model = buildGlasses(overlay);
+    // A front-view photo is used as the frame itself; otherwise the frame
+    // is built from the shape read from the (angled) photo.
+    model = overlay.centres || !overlay.model ? buildGlasses(overlay) : buildFrameModel(overlay.model);
     pivot.add(model.glasses);
     // Invisible head: writes depth only, so arms behind the head are hidden.
     head = new THREE.Mesh(

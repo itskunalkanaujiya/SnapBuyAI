@@ -1,4 +1,5 @@
 import io
+import json
 
 import pytest
 from fastapi.testclient import TestClient
@@ -185,3 +186,45 @@ def test_overlay_sends_lens_centres_and_caches_refusals(client, monkeypatch):
         bad = client.get(OVERLAY, params={"url": IMAGE_URL + "bad", "category": "glasses"})
         assert bad.status_code == 422
     assert len(calls) == 2
+
+
+def rim_glasses(left_width, right_width, colour="royalblue"):
+    """Clear-lens glasses: two rims of the given widths on white."""
+    image = Image.new("RGB", (320, 130), "white")
+    draw = ImageDraw.Draw(image)
+    draw.rounded_rectangle((20, 25, 20 + left_width, 105), radius=25, outline=colour, width=9)
+    right = 300 - right_width
+    draw.rounded_rectangle((right, 25 + (120 - right_width) // 6, 300, 105 - (120 - right_width) // 6), radius=20, outline=colour, width=9)
+    draw.line((20 + left_width, 50, right, 50), fill=colour, width=7)
+    return image
+
+
+def test_front_view_clear_glasses_give_centres_and_a_model():
+    cut = t.cut_out_product(rim_glasses(120, 120), "glasses")
+    details = t.analyse_glasses(cut)
+
+    assert details["centres"] is not None
+    model = details["model"]
+    assert model["lens_tint"] is None and not model["clear_frame"]
+    xs = [x for x, y in model["lens"]]
+    assert abs(max(xs) - min(xs) - 1) < 0.1  # lens width is 1
+
+
+def test_angled_clear_glasses_give_a_3d_model_only():
+    # The far lens is much narrower, as in an angled catalogue photo.
+    cut = t.cut_out_product(rim_glasses(140, 70), "glasses")
+    details = t.analyse_glasses(cut)
+
+    assert details["centres"] is None
+    model = details["model"]
+    assert len(model["lens"]) == t.OUTLINE_POINTS
+    assert model["frame"].startswith("#") and 0.025 <= model["rim"] <= 0.12
+
+
+def test_overlay_sends_the_glasses_model(client, monkeypatch):
+    monkeypatch.setattr(t, "download_garment", lambda url: rim_glasses(140, 70))
+    response = client.get(OVERLAY, params={"url": IMAGE_URL, "category": "glasses"})
+
+    assert response.status_code == 200
+    assert "x-lens-centres" not in response.headers
+    assert "lens" in json.loads(response.headers["x-glasses-model"])

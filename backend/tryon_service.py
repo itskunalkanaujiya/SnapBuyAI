@@ -337,20 +337,257 @@ def lens_centres(product):
     )
 
 
+# Lens shape analysis runs on a small copy of the cut-out.
+ANALYSIS_WIDTH = 240
+MIN_LENS_AREA_SHARE = 0.02  # a lens covers at least this share of the photo
+OUTLINE_POINTS = 72
+DARK_LENS_LUMA = 85  # tinted (sunglasses) lenses are darker than this
+
+
+def _components(binary, max_regions=400):
+    """Connected regions of a boolean array, largest first, as boolean masks."""
+    # A copy: images made from numpy arrays can be read-only.
+    image = Image.fromarray(binary.astype(np.uint8) * 255).copy()
+    regions = []
+    for _ in range(max_regions):
+        remaining = np.nonzero(np.asarray(image) == 255)
+        if not remaining[0].size:
+            break
+        seed = (int(remaining[1][0]), int(remaining[0][0]))
+        ImageDraw.floodfill(image, seed, 128)
+        region = np.asarray(image) == 128
+        regions.append(region)
+        ImageDraw.floodfill(image, seed, 0)
+    return sorted(regions, key=lambda region: -region.sum())
+
+
+def _touches_border(region):
+    return region[0].any() or region[-1].any() or region[:, 0].any() or region[:, -1].any()
+
+
+def _box(region):
+    ys, xs = np.nonzero(region)
+    return xs.min(), ys.min(), xs.max() + 1, ys.max() + 1
+
+
+def _hex(colour):
+    return "#" + "".join(f"{int(round(channel)):02x}" for channel in colour[:3])
+
+
+def _lens_outline(region, opaque):
+    """
+    Trace a lens outline from its centre outwards. Returns radii per angle
+    (pixels), the rim thickness (pixels) and the centre.
+    """
+    left, top, right, bottom = _box(region)
+    cx, cy = (left + right - 1) / 2, (top + bottom - 1) / 2
+    height, width = region.shape
+    radii, rims = [], []
+    for step in range(OUTLINE_POINTS):
+        angle = 2 * np.pi * step / OUTLINE_POINTS
+        dx, dy = np.cos(angle), np.sin(angle)
+        r = 0.0
+        while True:
+            x, y = int(round(cx + dx * r)), int(round(cy + dy * r))
+            if not (0 <= x < width and 0 <= y < height) or not region[y, x]:
+                break
+            r += 0.5
+        radii.append(r)
+        rim = 0.0
+        while True:
+            x, y = int(round(cx + dx * (r + rim))), int(round(cy + dy * (r + rim)))
+            if not (0 <= x < width and 0 <= y < height) or not opaque[y, x]:
+                break
+            rim += 0.5
+        rims.append(rim)
+
+    # Smooth out notches (a temple arm crossing the lens, reflections).
+    radii = np.array(radii)
+    padded = np.concatenate([radii[-2:], radii, radii[:2]])
+    radii = np.array([np.median(padded[i:i + 5]) for i in range(OUTLINE_POINTS)])
+    return radii, float(np.median(rims)), (cx, cy)
+
+
+def _fit_lens_shape(xs, ys):
+    """
+    Fit a clean lens outline to traced points (lens width ~1, nose side +x).
+
+    The shape is a superellipse whose top and bottom halves can differ in
+    squareness and width, with the bottom shifted towards the nose or the
+    temple. That covers round, square, wayfarer and aviator lenses. The fit
+    uses the median error, so dents from arms or reflections are ignored.
+    """
+    left, right = np.percentile(xs, [2, 98])
+    bottom, top = np.percentile(ys, [2, 98])
+    a, b = (right - left) / 2, (top - bottom) / 2
+    if a < 0.05 or b < 0.05:
+        return None
+    xs, ys = xs - (left + right) / 2, ys - (top + bottom) / 2
+    angles = np.arctan2(ys, xs)
+    measured = np.hypot(xs, ys)
+
+    best = None
+    for n_top in (2.0, 2.5, 3.0, 4.0, 5.0, 7.0):
+        for n_bottom in (2.0, 2.5, 3.0, 4.0, 5.0, 7.0):
+            for bottom_width in (0.8, 0.88, 0.95, 1.0):
+                for shift in (-0.12, 0.0, 0.12):
+                    cos, sin = np.cos(angles), np.sin(angles)
+                    lower = sin < 0
+                    n = np.where(lower, n_bottom, n_top)
+                    # Narrowing towards the bottom, continuous at the sides.
+                    width = np.where(lower, a * (1 - (1 - bottom_width) * np.abs(sin)), a)
+                    # The bottom half's centre moves sideways by `shift`.
+                    model = (np.abs(cos / width) ** n + np.abs(sin / b) ** n) ** (-1 / n)
+                    error = np.median(np.abs(model - measured))
+                    if best is None or error < best[0]:
+                        best = (error, n_top, n_bottom, bottom_width, shift)
+
+    _, n_top, n_bottom, bottom_width, shift = best
+    points = []
+    for step in range(OUTLINE_POINTS):
+        angle = 2 * np.pi * step / OUTLINE_POINTS
+        cos, sin = np.cos(angle), np.sin(angle)
+        lower = sin < 0
+        n = n_bottom if lower else n_top
+        width = a * (1 - (1 - bottom_width) * abs(sin)) if lower else a
+        r = (abs(cos / width) ** n + abs(sin / b) ** n) ** (-1 / n)
+        x = r * cos + (shift * a * -sin if lower else 0.0)
+        points.append([round(float(x / (2 * a)), 4), round(float(r * sin / (2 * a)), 4)])
+    return points
+
+
+def _solid_lens(region):
+    """Close small gaps and fill holes (reflections) in a tinted lens area."""
+    image = Image.fromarray(region.astype(np.uint8) * 255).copy()
+    image = image.filter(ImageFilter.MaxFilter(5)).filter(ImageFilter.MinFilter(5))
+    # A 1px empty border connects everything outside the lens.
+    outside = ImageOps.expand(image, border=1, fill=0)
+    ImageDraw.floodfill(outside, (0, 0), 128)
+    return np.asarray(outside)[1:-1, 1:-1] != 128
+
+
+def analyse_glasses(product):
+    """
+    Read the lenses from a glasses cut-out photographed at any angle.
+
+    Returns {"centres": (lx, ly, rx, ry) or None, "model": {...} or None}.
+    centres (fractions of the photo) are set for front views, where the photo
+    itself can be placed on a face. model describes the frame for building it
+    in 3D: the lens outline (points, lens width = 1, wearer's nose side +x),
+    rim thickness, frame and lens colours. Raises TryOnError if no lens can
+    be found.
+    """
+    scale = min(1.0, ANALYSIS_WIDTH / product.width)
+    small = product.resize(
+        (max(1, round(product.width * scale)), max(1, round(product.height * scale))),
+        Image.LANCZOS,
+    )
+    pixels = np.asarray(small).astype(float)
+    opaque = pixels[..., 3] > 128
+    luma = pixels[..., :3] @ np.array([0.299, 0.587, 0.114])
+    min_area = MIN_LENS_AREA_SHARE * opaque.size
+
+    # Clear lenses are holes in the frame; tinted lenses are dark areas.
+    holes = [
+        region for region in _components(~opaque)
+        if region.sum() >= min_area and not _touches_border(region)
+    ][:2]
+    tinted = not holes
+    if tinted:
+        # Tinted lenses: the darker half of the product, with reflections
+        # and gradients filled in.
+        levels = luma[opaque]
+        threshold = min(DARK_LENS_LUMA * 1.4, (np.percentile(levels, 10) + np.percentile(levels, 90)) / 2) if levels.size else 0
+        dark = np.asarray(
+            Image.fromarray((opaque & (luma < threshold)).astype(np.uint8) * 255).copy().filter(ImageFilter.MaxFilter(3))
+        ) > 0
+        lenses = [
+            _solid_lens(region) & opaque for region in _components(dark)
+            if region.sum() >= min_area * 0.6
+        ][:2]
+        lenses = sorted((lens for lens in lenses if lens.sum() >= min_area), key=lambda lens: -lens.sum())
+    else:
+        lenses = holes
+
+    centres = None
+    model = None
+    points = None
+    if lenses:
+        near = lenses[0]
+        radii, rim, (cx, cy) = _lens_outline(near, opaque)
+        left, top, right, bottom = _box(near)
+        lens_width = max(1.0, right - left)
+
+        # The nose side of the near lens faces the other lens.
+        nose_sign = 1.0
+        stretch = 1.0
+        if len(lenses) == 2:
+            far = lenses[1]
+            far_left, far_top, far_right, far_bottom = _box(far)
+            nose_sign = 1.0 if (far_left + far_right) / 2 > cx else -1.0
+            ratio = (far_right - far_left) / lens_width
+            # An angled photo narrows the lenses; widen the outline back.
+            stretch = min(1.4, 1 + max(0.0, 1 - ratio) * 0.9)
+
+            near_size = (lens_width, bottom - top)
+            far_size = (far_right - far_left, far_bottom - far_top)
+            if all(min(a, b) / max(a, b) >= MIN_LENS_SYMMETRY for a, b in zip(near_size, far_size)):
+                boxes = sorted([(left, top, right, bottom), (far_left, far_top, far_right, far_bottom)])
+                (l1, t1, r1, b1), (l2, t2, r2, b2) = boxes
+                height, width = near.shape
+                centres = (
+                    (l1 + r1) / 2 / width, (t1 + b1) / 2 / height,
+                    (l2 + r2) / 2 / width, (t2 + b2) / 2 / height,
+                )
+
+        angles = 2 * np.pi * np.arange(OUTLINE_POINTS) / OUTLINE_POINTS
+        points = _fit_lens_shape(
+            nose_sign * np.cos(angles) * radii * stretch / lens_width,
+            -np.sin(angles) * radii / lens_width,
+        )
+    if points:
+        # Frame colour: the rim around the lens. Lens colour: inside it.
+        ring = np.zeros_like(opaque)
+        ys, xs = np.mgrid[0:opaque.shape[0], 0:opaque.shape[1]]
+        distance = np.hypot(xs - cx, ys - cy)
+        outer = radii.max() + max(rim, 2) * 1.5
+        ring = opaque & ~near & (distance <= outer)
+        if tinted:
+            ring &= luma >= DARK_LENS_LUMA
+        frame = np.median(pixels[ring][:, :3], axis=0) if ring.any() else np.array([40, 40, 46])
+        frame_luma = float(frame @ np.array([0.299, 0.587, 0.114]))
+
+        model = {
+            "lens": points,
+            "rim": round(min(0.12, max(0.025, rim / lens_width)), 4),
+            "frame": _hex(frame),
+            # Light frames photographed on white are usually translucent.
+            "clear_frame": frame_luma > 180,
+            "lens_tint": _hex(np.median(pixels[near][:, :3], axis=0)) if tinted else None,
+        }
+
+    if centres is None:
+        try:
+            centres = lens_centres(product)
+        except TryOnError:
+            if model is None:
+                raise
+    return {"centres": centres, "model": model}
+
+
 def product_overlay(image_url, category):
     """
-    Download a glasses or watch photo and return (PNG bytes, lens centres).
-
-    Lens centres (see lens_centres) are None for watches.
+    Download a glasses or watch photo and return (PNG bytes, details), where
+    details is analyse_glasses()'s result for glasses and None for watches.
     """
     if category not in ("glasses", "watch"):
         raise TryOnError("This item can't be tried on live.")
 
     cut_out = cut_out_product(download_garment(image_url), category)
-    centres = lens_centres(cut_out) if category == "glasses" else None
+    details = analyse_glasses(cut_out) if category == "glasses" else None
     output = io.BytesIO()
     cut_out.save(output, format="PNG", optimize=True)
-    return output.getvalue(), centres
+    return output.getvalue(), details
 
 
 # --------------------------------------------------

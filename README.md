@@ -31,8 +31,10 @@ goes behind the head, posed from the tracked head; watches wrap around the
 wrist and tilt with it. A **Flat** view draws the photo in 2D. Glasses are placed by matching the lens
 centres in the product photo to the pupils (iris tracking). The web app checks
 each listing's photo in the background and shows "Try live" only when it is
-usable: a plain background and, for glasses, a front view (angled photos and
-see-through frames on white are refused). Users can also use a photo, adjust size and
+usable (a plain background). Most glasses listings show the frame at an
+angle; for those the backend reads the lens shape (fitted to a superellipse),
+rim thickness and frame and lens colours from the photo, and the browser
+builds the frame in 3D from that description (`X-Glasses-Model`). Users can also use a photo, adjust size and
 position, and save a picture.
 
 **Text search** sends the typed query to Google Shopping (through SerpApi):
