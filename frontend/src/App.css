@@ -3014,6 +3014,32 @@ label.field input::placeholder {
   text-transform: uppercase;
 }
 
+.live-view-toggle {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 999px;
+  background: rgba(15, 16, 26, 0.6);
+  gap: 2px;
+}
+
+.live-view-toggle button {
+  padding: 4px 11px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.live-view-toggle button.is-active {
+  background: #ffffff;
+  color: #4632d4;
+}
+
 .live-dot {
   width: 7px;
   height: 7px;

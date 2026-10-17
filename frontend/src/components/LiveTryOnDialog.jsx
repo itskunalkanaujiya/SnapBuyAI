@@ -11,6 +11,36 @@ import {
 } from "../lib/liveTryOn.js";
 
 const MAX_PHOTO_SIZE = 1280;
+
+/**
+ * Draw the product for these landmarks (null hides it) over the frame
+ * already on the canvas. Uses the 3D scene when given, else the flat photo.
+ * Returns whether anything was drawn.
+ */
+function drawTryOn(context, { landmarks, width, height, mirror, adjust, still, scene, overlay, category, state }) {
+  if (scene) {
+    const layer = scene.render(landmarks, width, height, adjust, still);
+    if (!layer) return false;
+    // The 3D layer is rendered in camera coordinates; mirror it like the video.
+    context.save();
+    if (mirror) {
+      context.translate(width, 0);
+      context.scale(-1, 1);
+    }
+    context.drawImage(layer, 0, 0, width, height);
+    context.restore();
+    return true;
+  }
+
+  if (!landmarks) {
+    state.place = null;
+    return false;
+  }
+  const next = placement(category, landmarks, width, height, mirror, adjust);
+  state.place = still ? next : smooth(state.place, next);
+  drawProduct(context, overlay, category, state.place);
+  return true;
+}
 // Frames without a face or hand before the product is hidden.
 const MISSED_FRAMES = 6;
 
@@ -41,6 +71,8 @@ export default function LiveTryOnDialog({ product, onClose }) {
   const streamRef = useRef(null);
   const photoRef = useRef(null); // { image, landmarks }
   const adjustRef = useRef({ size: 1, lift: 0 });
+  const sceneRef = useRef(null); // 3D try-on, when WebGL is available
+  const viewRef = useRef("3d");
 
   const [status, setStatus] = useState("loading"); // loading | ready | error
   const [source, setSource] = useState(null); // camera | photo | null
@@ -50,6 +82,8 @@ export default function LiveTryOnDialog({ product, onClose }) {
   const [lift, setLift] = useState(0);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [view, setView] = useState("3d"); // 3d | flat
+  const [has3d, setHas3d] = useState(false);
 
   const stopCamera = useCallback(() => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -83,14 +117,16 @@ export default function LiveTryOnDialog({ product, onClose }) {
   useEffect(() => {
     let cancelled = false;
 
-    Promise.all([createTracker(category), loadOverlay(product)])
-      .then(([tracker, overlay]) => {
+    Promise.all([createTracker(category), loadOverlay(product), import("../lib/tryOn3d.js")])
+      .then(([tracker, overlay, { createTryOn3d }]) => {
         if (cancelled) {
           tracker?.close();
           return;
         }
         trackerRef.current = tracker;
         overlayRef.current = overlay;
+        sceneRef.current = createTryOn3d(category, overlay);
+        setHas3d(Boolean(sceneRef.current));
         setStatus("ready");
         if (navigator.mediaDevices?.getUserMedia) startCamera("user");
       })
@@ -109,6 +145,8 @@ export default function LiveTryOnDialog({ product, onClose }) {
       stopCamera();
       trackerRef.current?.close();
       trackerRef.current = null;
+      sceneRef.current?.dispose();
+      sceneRef.current = null;
     };
   }, [category, product, startCamera, stopCamera]);
 
@@ -137,8 +175,9 @@ export default function LiveTryOnDialog({ product, onClose }) {
     let frame = 0;
     let lastTime = -1;
     let missed = MISSED_FRAMES;
-    let place = null;
+    let current = null;
     let shown = false;
+    const state = { place: null };
 
     function render() {
       frame = requestAnimationFrame(render);
@@ -162,16 +201,28 @@ export default function LiveTryOnDialog({ product, onClose }) {
 
       const tracker = trackerRef.current;
       const landmarks = tracker ? detect(tracker, video, performance.now()) : null;
+      // Brief tracking gaps keep the last position instead of flickering.
       if (landmarks) {
         missed = 0;
-        place = smooth(place, placement(category, landmarks, width, height, mirror, adjustRef.current));
+        current = landmarks;
       } else if (++missed >= MISSED_FRAMES) {
-        place = null;
+        current = null;
       }
 
-      if (place) drawProduct(context, overlayRef.current, category, place);
-      if (Boolean(place) !== shown) {
-        shown = Boolean(place);
+      const drawn = drawTryOn(context, {
+        landmarks: current,
+        width,
+        height,
+        mirror,
+        adjust: adjustRef.current,
+        still: false,
+        scene: viewRef.current === "3d" ? sceneRef.current : null,
+        overlay: overlayRef.current,
+        category,
+        state,
+      });
+      if (drawn !== shown) {
+        shown = drawn;
         setFound(shown);
       }
     }
@@ -180,9 +231,10 @@ export default function LiveTryOnDialog({ product, onClose }) {
     return () => cancelAnimationFrame(frame);
   }, [source, facing, category]);
 
-  // Photo: draw again whenever the sliders move.
+  // Photo: draw again whenever the sliders or the view change.
   useEffect(() => {
     adjustRef.current = { size, lift };
+    viewRef.current = view;
     const photo = photoRef.current;
     if (source !== "photo" || !photo) return;
 
@@ -192,11 +244,19 @@ export default function LiveTryOnDialog({ product, onClose }) {
     canvas.width = image.width;
     canvas.height = image.height;
     context.drawImage(image, 0, 0, image.width, image.height);
-    if (landmarks) {
-      const place = placement(category, landmarks, image.width, image.height, false, { size, lift });
-      drawProduct(context, overlayRef.current, category, place);
-    }
-  }, [source, size, lift, category]);
+    drawTryOn(context, {
+      landmarks,
+      width: image.width,
+      height: image.height,
+      mirror: false,
+      adjust: { size, lift },
+      still: true,
+      scene: view === "3d" ? sceneRef.current : null,
+      overlay: overlayRef.current,
+      category,
+      state: { place: null },
+    });
+  }, [source, size, lift, view, category]);
 
   async function choosePhoto(file) {
     if (!file || !trackerRef.current) return;
@@ -320,6 +380,24 @@ export default function LiveTryOnDialog({ product, onClose }) {
               <span className="live-badge">
                 <span className="live-dot" /> Live
               </span>
+            )}
+            {showStage && has3d && (
+              <div className="live-view-toggle" role="group" aria-label="View">
+                {[
+                  ["3d", "3D"],
+                  ["flat", "Flat"],
+                ].map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    className={view === value ? "is-active" : ""}
+                    aria-pressed={view === value}
+                    onClick={() => setView(value)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
             )}
           </div>
 

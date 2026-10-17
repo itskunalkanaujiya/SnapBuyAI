@@ -24,7 +24,11 @@ browser opens the camera and tracks the face or hand with
 (face and hand landmarks), and draws the product photo on top as you move:
 frames on the eyes, the watch on the wrist along the arm. The backend only
 removes the product photo's background (`/api/v1/tryon/overlay`); the camera
-feed never leaves the device. Glasses are placed by matching the lens
+feed never leaves the device. The default **3D view** (Three.js) builds a
+small model per product: the product photo as a curved front frame, 3D temple
+arms in the frame's colour, and an invisible head shape that hides whatever
+goes behind the head, posed from the tracked head; watches wrap around the
+wrist and tilt with it. A **Flat** view draws the photo in 2D. Glasses are placed by matching the lens
 centres in the product photo to the pupils (iris tracking). The web app checks
 each listing's photo in the background and shows "Try live" only when it is
 usable: a plain background and, for glasses, a front view (angled photos and
