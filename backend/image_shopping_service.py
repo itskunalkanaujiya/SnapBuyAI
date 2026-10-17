@@ -13,7 +13,7 @@ import requests
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 
-from tryon_service import garment_category
+from tryon_service import accessory_category, garment_category
 
 # On Vercel only /tmp is writable, so the downloaded model is cached there.
 # This must be set before transformers is imported.
@@ -1193,6 +1193,7 @@ def build_product(item, pending=False):
         # Try-on works best with the full-size product photo.
         "tryon_category": garment_category(item.get("title")),
         "tryon_image_url": item.get("image") or item.get("thumbnail"),
+        "ar_category": accessory_category(item.get("title")),
         "visual_similarity_score": visual_score,
         "text_relevance_score": round(item.get("_text_relevance_score", 0.0), 4),
         "match_type": (

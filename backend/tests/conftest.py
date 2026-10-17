@@ -17,10 +17,12 @@ def reset_server_state():
     main._search_cache.clear()
     main._search_log.clear()
     main._tryon_log.clear()
+    main._overlay_log.clear()
     yield
     main._search_cache.clear()
     main._search_log.clear()
     main._tryon_log.clear()
+    main._overlay_log.clear()
 
 
 @pytest.fixture

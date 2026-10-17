@@ -18,6 +18,15 @@ try-on models on Hugging Face: [Leffa](https://huggingface.co/spaces/franciszzj/
 (non-commercial) as a fallback for tops. A try-on takes about 20–40 seconds
 on Hugging Face's free GPU quota.
 
+**Live try-on** works for sunglasses, glasses and watches ("Try live"). The
+browser opens the camera and tracks the face or hand with
+[MediaPipe](https://ai.google.dev/edge/mediapipe/solutions/vision/face_landmarker)
+(face and hand landmarks), and draws the product photo on top as you move:
+frames on the eyes, the watch on the wrist along the arm. The backend only
+removes the product photo's background (`/api/v1/tryon/overlay`); the camera
+feed never leaves the device. Users can also use a photo, adjust size and
+position, and save a picture.
+
 **Text search** sends the typed query to Google Shopping (through SerpApi):
 top results keep Google's relevance order, and Lowest Prices are the
 cheapest listings that still contain most of the query's words. Listings
@@ -40,15 +49,19 @@ Google Shopping's page comparing the stores that sell the item.
 
 ```
 backend/                     FastAPI server
-  main.py                    API endpoints, upload validation, result cache
-  image_shopping_service.py  Google Lens search, ranking, price and stock extraction
-  text_shopping_service.py   Google Shopping search for typed queries
+  main.py                    API endpoints, upload validation, cache, rate limits
+  image_shopping_service.py  Google Lens search, CLIP ranking, price and stock extraction
+  text_shopping_service.py   Google Shopping search and relevance scoring
+  tryon_service.py           Clothing try-on (Hugging Face) and product cut-outs
+  tests/                     Offline tests
   requirements.txt
   .env.example               Copy to .env and add your SerpApi key
 frontend/                    React 19 + Vite app
   src/App.jsx                App state and page layout
-  src/components/            Upload panel, results, product cards, landing sections
+  src/components/            Search panels, results, product cards, try-on dialogs
   src/lib/products.js        Price, filter and formatting helpers
+  src/lib/tryon.js           Clothing try-on requests
+  src/lib/liveTryOn.js       Face/hand tracking and product placement
 ```
 
 ## Setup
@@ -119,6 +132,7 @@ host.
 | `POST` | `/api/v1/products/search-by-text/stream` | Same, streamed as `stage` then `final` (or `error`) events |
 | `POST` | `/api/v1/products/recognize-image` | Identify the product only; returns the derived query and top Lens titles |
 | `POST` | `/api/v1/tryon` | Multipart: `person` (photo), `garment_url` (product image), `category` (`upper_body`, `lower_body` or `dresses`, from the product's `tryon_category`), optional `garment_name`; returns a JPEG |
+| `GET` | `/api/v1/tryon/overlay` | Query `url` (product image) and `category` (`glasses` or `watch`, from the product's `ar_category`); returns the photo as a PNG with its background removed, for the live try-on |
 | `GET` | `/health` | Health check |
 
 ## Notes

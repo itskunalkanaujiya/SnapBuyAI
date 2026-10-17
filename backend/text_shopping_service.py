@@ -15,7 +15,7 @@ import statistics
 
 import requests
 
-from tryon_service import garment_category
+from tryon_service import accessory_category, garment_category
 from image_shopping_service import (
     QUERY_STOPWORDS,
     SERPAPI_URL,
@@ -285,6 +285,7 @@ def build_shopping_product(item, query):
         "source_icon": item.get("source_icon"),
         "tryon_category": garment_category(item.get("title")),
         "tryon_image_url": item.get("serpapi_thumbnail") or item.get("thumbnail"),
+        "ar_category": accessory_category(item.get("title")),
         "rating": item.get("rating"),
         "reviews": item.get("reviews"),
         "condition": item_condition(item),

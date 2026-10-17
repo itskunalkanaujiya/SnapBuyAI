@@ -1,6 +1,7 @@
 import { useState } from "react";
 import Icon from "./Icon.jsx";
 import { canTryOn } from "../lib/tryon.js";
+import { canTryOnLive } from "../lib/liveTryOn.js";
 import {
   AVAILABILITY_LABELS,
   formatPrice,
@@ -81,10 +82,15 @@ export default function ProductCard({ product, isSaved, onToggleSave, onTryOn, h
           )}
         </div>
 
-        {onTryOn && canTryOn(product) && (
-          <button type="button" className="tryon-button" onClick={() => onTryOn(product)}>
-            <Icon name="shirt" size={14} />
-            Try on
+        {onTryOn && (canTryOnLive(product) || canTryOn(product)) && (
+          <button
+            type="button"
+            className="tryon-button"
+            onClick={() => onTryOn(product)}
+            title={canTryOnLive(product) ? "Try it on live with your camera" : "See it on your photo"}
+          >
+            <Icon name={canTryOnLive(product) ? "camera" : "shirt"} size={14} />
+            {canTryOnLive(product) ? "Try live" : "Try on"}
           </button>
         )}
 

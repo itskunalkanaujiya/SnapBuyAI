@@ -44,6 +44,11 @@ const FAQS = [
       "Yes. Tap \"Try on\" on any top, kurti, shirt, dress or bottom in your results, add a photo of yourself, and AI shows you wearing it in about 20–40 seconds. Use a clear, front-facing photo; a full-length one works best for long garments. Your photo is sent to free AI models on Hugging Face only to create the try-on, and is kept in your browser for next time.",
   },
   {
+    question: "Can I try on sunglasses and watches?",
+    answer:
+      "Yes, live. Tap \"Try live\" on sunglasses, glasses or a watch and SnapBuy opens your camera: the frames follow your face and the watch follows your wrist as you move. You can also use a photo, adjust the size and position, and save a picture. It runs entirely on your device — the camera feed is never uploaded.",
+  },
+  {
     question: "Which stores does it search?",
     answer:
       "Any online store Google Lens finds — often Amazon, Flipkart, Myntra, AJIO, Meesho and Tata CLiQ, plus many smaller shops. Results are tuned for India.",

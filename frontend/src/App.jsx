@@ -7,6 +7,7 @@ import ProductCard from "./components/ProductCard.jsx";
 import RecentSearches from "./components/RecentSearches.jsx";
 import TextSearchPanel, { SearchModeTabs } from "./components/TextSearchPanel.jsx";
 import TryOnDialog from "./components/TryOnDialog.jsx";
+import LiveTryOnDialog from "./components/LiveTryOnDialog.jsx";
 import ResultsView, { ResultsLoading } from "./components/ResultsView.jsx";
 import UploadPanel from "./components/UploadPanel.jsx";
 import {
@@ -643,7 +644,12 @@ export default function App() {
         />
       )}
 
-      {tryOnProduct && <TryOnDialog product={tryOnProduct} onClose={closeTryOn} />}
+      {tryOnProduct &&
+        (tryOnProduct.ar_category ? (
+          <LiveTryOnDialog product={tryOnProduct} onClose={closeTryOn} />
+        ) : (
+          <TryOnDialog product={tryOnProduct} onClose={closeTryOn} />
+        ))}
 
       <footer className="site-footer">
         <div className="container footer-inner">

@@ -1,10 +1,13 @@
 """
-Virtual try-on: show a person wearing a garment from the search results.
+Virtual try-on: show a person wearing a product from the search results.
 
-Uses free public try-on models on Hugging Face Spaces through gradio_client:
-Leffa (MIT licence) first, IDM-VTON (non-commercial licence) as a fallback
-for upper-body garments. Both run on Hugging Face's free ZeroGPU quota,
-which is tied to the HF_TOKEN account.
+Clothing uses free public try-on models on Hugging Face Spaces through
+gradio_client: Leffa (MIT licence) first, IDM-VTON (non-commercial licence)
+as a fallback for upper-body garments. Both run on Hugging Face's free
+ZeroGPU quota, which is tied to the HF_TOKEN account.
+
+Sunglasses and watches are tried on live in the browser (face and hand
+tracking); the backend only cuts the product photo out of its background.
 """
 
 import io
@@ -17,7 +20,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import requests
-from PIL import Image, ImageOps
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageOps
 
 TRYON_SIZE = (768, 1024)  # width, height the models are trained on (3:4)
 MAX_GARMENT_BYTES = 8 * 1024 * 1024
@@ -57,6 +60,31 @@ NOT_GARMENT = re.compile(
 )
 
 
+# Accessories tried on live in the browser, and lookalikes that are not.
+GLASSES_PATTERN = re.compile(
+    r"\b(sun ?glass(es)?|spectacles?|eye ?glass(es)?|eyewear|goggles?|"
+    r"glasses|(optical|eye|spectacle|computer) frames?)\b",
+    re.IGNORECASE,
+)
+WATCH_PATTERN = re.compile(r"\b(wrist ?watch(es)?|smart ?watch(es)?|watch(es)?)\b", re.IGNORECASE)
+NOT_ACCESSORY = re.compile(
+    r"\b(wine|beer|whisky|whiskey|drinking|juice|water|shot|cocktail|champagne|"
+    r"tea|coffee|glassware|tumblers?|magnifying|safety|swimming|vr|3d|"
+    r"protector|tempered|screen ?guard|case|cover|box|pouch|holder|cleaner|"
+    r"cleaning|stand|charger|cable|dock|winder|replacement|"
+    r"watch (straps?|bands?)|(straps?|bands?) for|"
+    r"(sun ?glass(es)?|glasses|spectacles?|eyewear) (chains?|cords?|straps?)|"
+    r"lens(es)? only|toy|sticker|poster|print|printed)\b",
+    re.IGNORECASE,
+)
+
+OVERLAY_MAX_SIZE = 640
+BACKGROUND_TOLERANCE = 32  # colour distance still counted as background
+MIN_PLAIN_BORDER = 0.6  # share of the border that must be plain background
+MIN_LENS_AREA = 0.015  # enclosed areas this big (share of image) are clear lenses
+MIN_GLASSES_RATIO = 1.25  # glasses photos are wide; taller ones show a model
+
+
 class TryOnError(Exception):
     """A try-on could not be produced; the message is safe to show users."""
 
@@ -74,6 +102,18 @@ def garment_category(name):
         vocabulary = GARMENT_WORDS[category]
         if words & vocabulary or any(" " in v and v in text for v in vocabulary):
             return category
+    return None
+
+
+def accessory_category(name):
+    """Return "glasses", "watch" or None: accessories tried on with the camera."""
+    text = (name or "").lower()
+    if not text or NOT_ACCESSORY.search(text):
+        return None
+    if GLASSES_PATTERN.search(text):
+        return "glasses"
+    if WATCH_PATTERN.search(text):
+        return "watch"
     return None
 
 
@@ -139,6 +179,114 @@ def download_garment(url):
     except Exception as exc:
         print(f"Could not load garment image {url}: {exc}")
         raise TryOnError("Couldn't load this product's image. Try another item.")
+
+
+def _border_pixels(image):
+    width, height = image.size
+    pixels = image.load()
+    step = max(1, min(width, height) // 60)
+    points = [(x, y) for x in range(0, width, step) for y in (0, height - 1)]
+    points += [(x, y) for y in range(0, height, step) for x in (0, width - 1)]
+    return points, [pixels[point] for point in points]
+
+
+def _trim(rgba):
+    box = rgba.getchannel("A").point(lambda value: 255 if value > 24 else 0).getbbox()
+    if not box:
+        raise TryOnError("Couldn't find the product in its photo. Try another listing.")
+    return rgba.crop(box)
+
+
+def _clear_lenses(mask):
+    """Mark large enclosed background areas (value 0) as background (128)."""
+    width, height = mask.size
+    min_area = MIN_LENS_AREA * width * height
+    data = mask.load()
+    for y in range(0, height, 2):
+        for x in range(0, width, 2):
+            if data[x, y] != 0:
+                continue
+            ImageDraw.floodfill(mask, (x, y), 64)
+            area = mask.histogram()[64]
+            ImageDraw.floodfill(mask, (x, y), 128 if area >= min_area else 255)
+
+
+def cut_out_product(image, category):
+    """
+    Remove a plain (usually white) background from a product photo.
+
+    Returns an RGBA image trimmed to the product. For glasses every
+    background-coloured area becomes transparent, so clear lenses show the
+    face behind them; for watches only background touching the edges does,
+    so a white dial stays white. Raises TryOnError if the photo has no plain
+    background (for example a model wearing the product).
+    """
+    image = ImageOps.exif_transpose(image)
+    image.thumbnail((OVERLAY_MAX_SIZE, OVERLAY_MAX_SIZE), Image.LANCZOS)
+
+    # Photos that are already cut out (transparent PNGs) keep their alpha.
+    if image.mode in ("RGBA", "LA") or "transparency" in image.info:
+        rgba = image.convert("RGBA")
+        if rgba.getchannel("A").getextrema()[0] < 128:
+            return _trim(rgba)
+
+    rgb = image.convert("RGB")
+    points, colours = _border_pixels(rgb)
+    # The most common border colour (rounded) is taken as the background.
+    rounded = [tuple(channel // 8 * 8 + 4 for channel in colour) for colour in colours]
+    background = max(set(rounded), key=rounded.count)
+
+    def distance(colour):
+        return max(abs(a - b) for a, b in zip(colour, background))
+
+    plain = sum(distance(colour) <= BACKGROUND_TOLERANCE for colour in colours)
+    if plain / len(colours) < MIN_PLAIN_BORDER:
+        raise TryOnError(
+            "This product photo doesn't have a plain background, so it can't be "
+            "placed on you. Try another listing."
+        )
+
+    # Foreground = pixels that differ clearly from the background colour.
+    difference = ImageChops.difference(rgb, Image.new("RGB", rgb.size, background))
+    red, green, blue = difference.split()
+    spread = ImageChops.lighter(ImageChops.lighter(red, green), blue)
+    mask = spread.point(lambda value: 255 if value > BACKGROUND_TOLERANCE else 0)
+
+    # Background touching the edges is removed. Enclosed background areas
+    # are removed too for glasses when large (clear lenses), but kept when
+    # small (reflections on mirrored lenses) and always for watches (dials).
+    for point in points:
+        if mask.getpixel(point) == 0:
+            ImageDraw.floodfill(mask, point, 128)
+    if category == "glasses":
+        _clear_lenses(mask)
+    mask = mask.point(lambda value: 0 if value == 128 else 255)
+
+    # Close pinholes, then soften the edge so it blends into the video.
+    mask = mask.filter(ImageFilter.MaxFilter(3)).filter(ImageFilter.MinFilter(3))
+    mask = mask.filter(ImageFilter.GaussianBlur(0.8))
+
+    rgba = rgb.convert("RGBA")
+    rgba.putalpha(mask)
+    product = _trim(rgba)
+
+    if category == "glasses" and product.width < product.height * MIN_GLASSES_RATIO:
+        raise TryOnError(
+            "This listing's photo isn't a front view of the glasses, so it can't be "
+            "placed on you. Try another listing."
+        )
+    return product
+
+
+def product_overlay(image_url, category):
+    """Download a glasses or watch photo and return it as a cut-out PNG."""
+    if category not in ("glasses", "watch"):
+        raise TryOnError("This item can't be tried on live.")
+
+    cut_out = cut_out_product(download_garment(image_url), category)
+    output = io.BytesIO()
+    cut_out.save(output, format="PNG", optimize=True)
+    return output.getvalue()
 
 
 # --------------------------------------------------

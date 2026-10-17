@@ -23,7 +23,7 @@ from image_shopping_service import (
     search_products_by_image as search_online_products,
 )
 from text_shopping_service import search_products_by_text as search_shopping_text
-from tryon_service import GARMENT_WORDS, TryOnError, try_on
+from tryon_service import GARMENT_WORDS, TryOnError, product_overlay, try_on
 
 # --------------------------------------------------
 # 1. Create the FastAPI application
@@ -716,3 +716,44 @@ async def virtual_try_on(
         headers={"Cache-Control": "no-store", "X-Tryon-Cached": was_cached},
     )
 
+
+# Live try-on (sunglasses, watches) runs in the browser; it only needs the
+# product photo without its background. Cheap, but it fetches remote images,
+# so it is limited too.
+OVERLAY_LIMIT = int(os.getenv("OVERLAY_LIMIT", "40"))
+_overlay_log = {}
+
+
+@app.get("/api/v1/tryon/overlay")
+async def try_on_overlay(request: Request, url: str, category: str):
+    """
+    Return a product photo (category "glasses" or "watch", the product's
+    ar_category) as a PNG with its background removed.
+    """
+    if category not in ("glasses", "watch"):
+        raise HTTPException(status_code=400, detail="This item can't be tried on live.")
+    if len(url) > 2048:
+        raise HTTPException(status_code=400, detail="This product image can't be used.")
+
+    cache_key = f"overlay:{category}:{url}"
+    cached = get_cached_search(cache_key)
+
+    if cached is None:
+        enforce_limit(request, _overlay_log, OVERLAY_LIMIT, TRYON_WINDOW_SECONDS, "live try-ons")
+        try:
+            cached = await run_in_threadpool(product_overlay, url, category)
+        except TryOnError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+        except Exception as exc:
+            print(f"Overlay failed: {exc}")
+            raise HTTPException(
+                status_code=422,
+                detail="Couldn't prepare this product's photo. Try another listing.",
+            )
+        store_cached_search(cache_key, cached)
+
+    return Response(
+        content=cached,
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
