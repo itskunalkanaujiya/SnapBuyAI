@@ -91,14 +91,8 @@ async function fetchOverlay(product) {
     throw new Error(detail);
   }
   const centres = response.headers.get("X-Lens-Centres")?.split(",").map(Number) || null;
-  let model = null;
-  try {
-    model = JSON.parse(response.headers.get("X-Glasses-Model") || "null");
-  } catch {
-    // No 3D frame description; the photo is used.
-  }
   const image = await createImageBitmap(await response.blob());
-  return { image, centres, model };
+  return { image, centres };
 }
 
 /** Load the face (glasses) or hand (watch) tracker. */

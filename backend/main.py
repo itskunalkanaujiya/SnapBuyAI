@@ -67,7 +67,7 @@ app.add_middleware(
     allow_origin_regex=os.getenv("ALLOWED_ORIGIN_REGEX") or None,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["X-Lens-Centres", "X-Glasses-Model"],
+    expose_headers=["X-Lens-Centres"],
 )
 
 
@@ -768,10 +768,8 @@ async def try_on_overlay(request: Request, url: str, category: str):
     if isinstance(cached, str):
         raise HTTPException(status_code=422, detail=cached)
 
-    png, details = cached
+    png, centres = cached
     headers = {"Cache-Control": "public, max-age=86400"}
-    if details and details["centres"]:
-        headers["X-Lens-Centres"] = ",".join(f"{value:.4f}" for value in details["centres"])
-    if details and details["model"]:
-        headers["X-Glasses-Model"] = json.dumps(details["model"], separators=(",", ":"))
+    if centres:
+        headers["X-Lens-Centres"] = ",".join(f"{value:.4f}" for value in centres)
     return Response(content=png, media_type="image/png", headers=headers)

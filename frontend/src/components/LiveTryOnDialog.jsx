@@ -84,8 +84,6 @@ export default function LiveTryOnDialog({ product, onClose }) {
   const [notice, setNotice] = useState("");
   const [view, setView] = useState("3d"); // 3d | flat
   const [has3d, setHas3d] = useState(false);
-  // Angled glasses photos only work as a 3D frame, not as a flat picture.
-  const [canFlat, setCanFlat] = useState(true);
 
   const stopCamera = useCallback(() => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -129,7 +127,6 @@ export default function LiveTryOnDialog({ product, onClose }) {
         overlayRef.current = overlay;
         sceneRef.current = createTryOn3d(category, overlay);
         setHas3d(Boolean(sceneRef.current));
-        setCanFlat(category !== "glasses" || Boolean(overlay.centres));
         setStatus("ready");
         if (navigator.mediaDevices?.getUserMedia) startCamera("user");
       })
@@ -384,7 +381,7 @@ export default function LiveTryOnDialog({ product, onClose }) {
                 <span className="live-dot" /> Live
               </span>
             )}
-            {showStage && has3d && canFlat && (
+            {showStage && has3d && (
               <div className="live-view-toggle" role="group" aria-label="View">
                 {[
                   ["3d", "3D"],

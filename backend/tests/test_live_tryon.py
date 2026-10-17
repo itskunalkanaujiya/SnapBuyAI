@@ -1,5 +1,4 @@
 import io
-import json
 
 import pytest
 from fastapi.testclient import TestClient
@@ -199,32 +198,23 @@ def rim_glasses(left_width, right_width, colour="royalblue"):
     return image
 
 
-def test_front_view_clear_glasses_give_centres_and_a_model():
+def test_front_view_clear_glasses_give_lens_centres():
     cut = t.cut_out_product(rim_glasses(120, 120), "glasses")
-    details = t.analyse_glasses(cut)
+    left_x, left_y, right_x, right_y = t.front_lens_centres(cut)
 
-    assert details["centres"] is not None
-    model = details["model"]
-    assert model["lens_tint"] is None and not model["clear_frame"]
-    xs = [x for x, y in model["lens"]]
-    assert abs(max(xs) - min(xs) - 1) < 0.1  # lens width is 1
+    assert left_x < 0.4 < 0.6 < right_x
+    assert abs(left_y - right_y) < 0.05
 
 
-def test_angled_clear_glasses_give_a_3d_model_only():
+def test_angled_clear_glasses_are_refused():
     # The far lens is much narrower, as in an angled catalogue photo.
     cut = t.cut_out_product(rim_glasses(140, 70), "glasses")
-    details = t.analyse_glasses(cut)
-
-    assert details["centres"] is None
-    model = details["model"]
-    assert len(model["lens"]) == t.OUTLINE_POINTS
-    assert model["frame"].startswith("#") and 0.025 <= model["rim"] <= 0.12
+    with pytest.raises(t.TryOnError):
+        t.front_lens_centres(cut)
 
 
-def test_overlay_sends_the_glasses_model(client, monkeypatch):
+def test_overlay_refuses_angled_glasses(client, monkeypatch):
     monkeypatch.setattr(t, "download_garment", lambda url: rim_glasses(140, 70))
     response = client.get(OVERLAY, params={"url": IMAGE_URL, "category": "glasses"})
-
-    assert response.status_code == 200
-    assert "x-lens-centres" not in response.headers
-    assert "lens" in json.loads(response.headers["x-glasses-model"])
+    assert response.status_code == 422
+    assert "front view" in response.json()["detail"]
