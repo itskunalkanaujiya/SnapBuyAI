@@ -15,7 +15,8 @@ import statistics
 
 import requests
 
-from query_understanding import parse_query, requirements_score
+from llm_query_parser import understand_query
+from query_understanding import requirements_score
 from tryon_service import accessory_category, garment_category
 from image_shopping_service import (
     QUERY_STOPWORDS,
@@ -370,7 +371,7 @@ def search_products_by_text(query: str, max_results: int = 10) -> dict:
 
     # Read the request: "a laptop of 8gb ram with company hp" searches for
     # "hp laptop 8GB RAM" and ranks listings by how many requirements they meet.
-    parsed = parse_query(query)
+    parsed = understand_query(query)
     structured = parsed.is_structured
     search_query = parsed.search_query if structured else query
     match_query = parsed.core_query if structured else query

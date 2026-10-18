@@ -83,11 +83,20 @@ class ParsedQuery:
     audience: str | None = None
     min_price: float | None = None
     max_price: float | None = None
+    # Set when a language model read the request (llm_query_parser):
+    wishes: list[str] = field(default_factory=list)  # soft, e.g. "gaming"
+    model_query: str | None = None  # the model's suggested search query
+    read_by_model: bool = False
 
     @property
     def search_query(self):
         """What to send to Google Shopping."""
-        parts = [self.brand, self.colour, self.audience, self.product, *self.features]
+        if self.model_query:
+            query = self.model_query
+            if self.brand and self.brand.replace("-", "") not in query.replace("-", ""):
+                query = f"{self.brand} {query}"
+            return query
+        parts = [self.brand, self.colour, self.audience, self.product, *self.features, *self.wishes]
         parts += [spec.query for spec in self.specs]
         return " ".join(part for part in parts if part) or self.raw
 
@@ -100,7 +109,9 @@ class ParsedQuery:
     @property
     def is_structured(self):
         """True when the request had more than plain keywords."""
-        return bool(self.specs or self.min_price or self.max_price or self.brand_named)
+        return bool(
+            self.specs or self.min_price or self.max_price or self.brand_named or self.read_by_model
+        )
 
     brand_named: bool = False  # the brand was introduced with "brand"/"company"
 
@@ -114,6 +125,7 @@ class ParsedQuery:
             parts.append(product[:1].upper() + product[1:])
         parts += [feature.upper() if feature in UPPER_FEATURES else feature for feature in self.features]
         parts += [spec.label for spec in self.specs]
+        parts += [wish[:1].upper() + wish[1:] for wish in self.wishes]
         if self.colour:
             parts.append(self.colour.title())
         if self.audience:
