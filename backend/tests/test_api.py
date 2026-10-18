@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 
 import image_shopping_service as s
 import main
+from conftest import FakeResponse
 
 SEARCH = "/api/v1/products/search-by-image"
 STREAM = "/api/v1/products/search-by-image/stream"
@@ -228,3 +229,38 @@ def test_cors_allows_configured_origins(monkeypatch):
         monkeypatch.delenv("ALLOWED_ORIGINS")
         monkeypatch.delenv("ALLOWED_ORIGIN_REGEX")
         importlib.reload(main)
+
+
+def test_usage_reports_searches_left_and_is_cached(monkeypatch):
+    calls = []
+
+    def account(url, params, timeout):
+        calls.append(url)
+        return FakeResponse(data={
+            "total_searches_left": 167, "searches_per_month": 250,
+            "this_month_usage": 83, "plan_renewal_date": "2026-11-09",
+            "plan_name": "Free Plan", "api_key": "secret",
+        })
+
+    monkeypatch.setenv("SERPAPI_API_KEY", "test-key")
+    monkeypatch.setattr(main.requests, "get", account)
+    main._usage_cache.update(at=0.0, data=None)
+    client = TestClient(main.app)
+
+    first = client.get("/api/v1/usage").json()
+    client.get("/api/v1/usage")
+
+    assert first == {
+        "searches_left": 167, "searches_per_month": 250, "used_this_month": 83,
+        "renews_on": "2026-11-09", "plan": "Free Plan",
+    }
+    assert len(calls) == 1  # cached; the API key is never returned
+
+
+def test_usage_unavailable_gives_503(monkeypatch):
+    def broken(*args, **kwargs):
+        raise ConnectionError("down")
+
+    monkeypatch.setattr(main.requests, "get", broken)
+    main._usage_cache.update(at=0.0, data=None)
+    assert TestClient(main.app).get("/api/v1/usage").status_code == 503

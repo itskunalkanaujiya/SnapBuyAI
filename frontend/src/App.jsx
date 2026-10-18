@@ -8,6 +8,7 @@ import RecentSearches from "./components/RecentSearches.jsx";
 import TextSearchPanel, { SearchModeTabs } from "./components/TextSearchPanel.jsx";
 import TryOnDialog from "./components/TryOnDialog.jsx";
 import LiveTryOnDialog from "./components/LiveTryOnDialog.jsx";
+import SearchQuota from "./components/SearchQuota.jsx";
 import ResultsView, { ResultsLoading } from "./components/ResultsView.jsx";
 import UploadPanel from "./components/UploadPanel.jsx";
 import {
@@ -539,6 +540,7 @@ export default function App() {
                     error={error}
                   />
                 )}
+                <SearchQuota refreshKey={isSearching} />
                 </div>
               </div>
 

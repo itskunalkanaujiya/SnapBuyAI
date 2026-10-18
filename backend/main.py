@@ -10,6 +10,7 @@ import tempfile
 import threading
 import time
 
+import requests
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
@@ -231,6 +232,54 @@ def health():
     }
 
 
+# SerpApi's account endpoint is free (it doesn't use a search), but it is
+# still cached briefly so every page load doesn't call it.
+USAGE_CACHE_SECONDS = 60
+_usage_cache = {"at": 0.0, "data": None}
+_usage_lock = threading.Lock()
+
+
+def fetch_search_usage():
+    api_key = os.getenv("SERPAPI_API_KEY")
+    if not api_key:
+        raise RuntimeError("SERPAPI_API_KEY is missing")
+    response = requests.get(
+        "https://serpapi.com/account.json", params={"api_key": api_key}, timeout=10
+    )
+    response.raise_for_status()
+    account = response.json()
+    return {
+        "searches_left": account.get("total_searches_left"),
+        "searches_per_month": account.get("searches_per_month"),
+        "used_this_month": account.get("this_month_usage"),
+        "renews_on": account.get("plan_renewal_date"),
+        "plan": account.get("plan_name"),
+    }
+
+
+@app.get("/api/v1/usage")
+async def search_usage():
+    """How many SerpApi searches are left this month (photo and text search)."""
+    with _usage_lock:
+        fresh = time.monotonic() - _usage_cache["at"] < USAGE_CACHE_SECONDS
+        if fresh and _usage_cache["data"]:
+            return _usage_cache["data"]
+    try:
+        data = await run_in_threadpool(fetch_search_usage)
+    except Exception as exc:
+        print(f"Could not read SerpApi usage: {exc}")
+        raise HTTPException(status_code=503, detail="Search usage is unavailable right now.")
+    with _usage_lock:
+        _usage_cache.update(at=time.monotonic(), data=data)
+    return data
+
+
+def forget_search_usage():
+    """A search just ran; read the count again next time."""
+    with _usage_lock:
+        _usage_cache["at"] = 0.0
+
+
 # --------------------------------------------------
 # 7. Identify the product in an uploaded image
 # --------------------------------------------------
@@ -383,7 +432,9 @@ def enforce_limit(request: Request, usage_log, limit, window_seconds, noun):
 
 
 def check_search_limit(request: Request):
+    """Called before every uncached search, i.e. one that uses SerpApi."""
     enforce_limit(request, _search_log, SEARCH_LIMIT, SEARCH_WINDOW_SECONDS, "searches")
+    forget_search_usage()
 
 
 # --------------------------------------------------

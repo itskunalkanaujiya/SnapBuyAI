@@ -2639,6 +2639,74 @@ label.field input::placeholder {
   content: "";
 }
 
+/* ---------- Search quota ---------- */
+
+.search-quota {
+  display: grid;
+  margin-top: 12px;
+  padding: 11px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  gap: 7px;
+}
+
+.search-quota-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  color: var(--text-2);
+  font-size: 13px;
+  gap: 4px 12px;
+}
+
+.search-quota-head strong {
+  color: var(--text);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.search-quota-renew {
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.search-quota-track {
+  overflow: hidden;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+
+.search-quota-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--primary);
+  transition: width 0.4s var(--ease);
+}
+
+.quota-low .search-quota-track span {
+  background: #e8a317;
+}
+
+.quota-empty .search-quota-track span,
+.quota-empty .search-quota-head strong {
+  color: var(--danger);
+  background: var(--danger);
+}
+
+.quota-empty .search-quota-head strong {
+  background: none;
+}
+
+.search-quota-note {
+  color: var(--text-3);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 /* ---------- Virtual try-on ---------- */
 
 .tryon-button {
