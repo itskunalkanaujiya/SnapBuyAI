@@ -410,6 +410,15 @@ def search_products_by_text(query: str, max_results: int = 10) -> dict:
     relevant = [p for p in products if p["text_relevance_score"] >= MIN_RELEVANCE]
     if len(relevant) < MIN_RESULTS_BEFORE_RELAXING:
         relevant = [p for p in products if p["text_relevance_score"] >= RELAXED_RELEVANCE]
+    if structured and len(relevant) < MIN_RESULTS_BEFORE_RELAXING:
+        # Google already searched the precise request; titles often omit the
+        # product word ("iQOO Z9 5G 8GB 128GB" for a phone). Trust its results,
+        # still leaving out accessories the request didn't ask for.
+        asked_accessory = ACCESSORY_PATTERN.search(search_query)
+        relevant = [
+            p for p in products
+            if asked_accessory or not ACCESSORY_PATTERN.search(p["name"])
+        ]
 
     if structured and (parsed.specs or parsed.features or parsed.brand):
         # Listings meeting none of the requirements are dropped while enough

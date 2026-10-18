@@ -55,7 +55,7 @@ Google Shopping is searched for "hp laptop 8GB RAM 500GB", the budget is a
 hard limit, and listings are ranked by how many requirements their titles
 meet (512 GB counts as ~500 GB). The results page shows what was understood.
 Plain keyword searches work as before. With `GROQ_API_KEY` set, sentence-style
-requests are also read by a language model (Groq, Llama 3.1 8B, free tier;
+requests are also read by a language model (Groq free tier: Qwen3.8 27B, GPT-OSS 20B as backup;
 `backend/llm_query_parser.py`), which understands looser phrasing ("a phone
 good for gaming that lasts all day", "something to keep my tea hot") and
 suggests the search query. Numbers and budgets written in the request always

@@ -95,6 +95,10 @@ class ParsedQuery:
             query = self.model_query
             if self.brand and self.brand.replace("-", "") not in query.replace("-", ""):
                 query = f"{self.brand} {query}"
+            # Google Shopping understands budgets in the query, which brings
+            # more listings within it.
+            if self.max_price and "under" not in query and "below" not in query:
+                query = f"{query} under {self.max_price:.0f}"
             return query
         parts = [self.brand, self.colour, self.audience, self.product, *self.features, *self.wishes]
         parts += [spec.query for spec in self.specs]

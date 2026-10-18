@@ -7,7 +7,7 @@ numbers and units. The model adds understanding of looser phrasing:
 gaming phone with a big battery and a ₹20,000 budget, and "something to
 keep my tea hot at work" becomes an insulated flask.
 
-The model only runs for sentence-like requests (short keyword searches
+The model (Qwen3.8 27B on Groq) only runs for sentence-like requests (short keyword searches
 don't need it), answers in strict JSON, and anything unexpected falls back
 to the rule-based reader.
 """
@@ -31,7 +31,14 @@ from query_understanding import (
 )
 
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
-GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
+# Tried in order; a retired model (Groq retires them now and then) is skipped.
+# Qwen gave the cleanest search queries in our tests, at about 0.7 s.
+GROQ_MODELS = [
+    model
+    for model in (os.getenv("GROQ_MODEL"), "qwen/qwen3.8-27b", "openai/gpt-oss-20b")
+    if model
+]
+_retired_models = set()
 TIMEOUT_SECONDS = 4
 CACHE_ENTRIES = 500
 
@@ -93,22 +100,35 @@ def looks_like_sentence(query):
 
 def ask_model(query):
     """The model's reading of a request, as a dict. Raises on any failure."""
-    response = requests.post(
-        GROQ_URL,
-        headers={"Authorization": f"Bearer {os.environ['GROQ_API_KEY']}"},
-        json={
-            "model": GROQ_MODEL,
+    for model in GROQ_MODELS:
+        if model in _retired_models:
+            continue
+        body = {
+            "model": model,
             "temperature": 0,
-            "max_tokens": 300,
+            "max_tokens": 600,
             "response_format": {"type": "json_object"},
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": query},
             ],
-        },
-        timeout=TIMEOUT_SECONDS,
-    )
-    response.raise_for_status()
+        }
+        if model.startswith("openai/gpt-oss"):
+            body["reasoning_effort"] = "low"  # a reasoning model; keep it quick
+        response = requests.post(
+            GROQ_URL,
+            headers={"Authorization": f"Bearer {os.environ['GROQ_API_KEY']}"},
+            json=body,
+            timeout=TIMEOUT_SECONDS,
+        )
+        if response.status_code == 404:
+            print(f"Groq model {model} is not available; trying the next one.")
+            _retired_models.add(model)
+            continue
+        response.raise_for_status()
+        break
+    else:
+        raise RuntimeError("no Groq model is available")
     content = response.json()["choices"][0]["message"]["content"]
     data = json.loads(content)
     if not isinstance(data, dict):
@@ -156,7 +176,7 @@ def from_model(query, data, rules):
     for feature in data.get("features") or []:
         feature = _text(feature, 25)
         known = {f.replace(" ", "") for f in parsed.features + parsed.wishes}
-        if feature and feature.replace(" ", "") not in known and feature != parsed.product:
+        if feature and feature.replace(" ", "") not in known and feature not in (parsed.product or ""):
             parsed.wishes.append(feature)
     parsed.wishes = parsed.wishes[:3]
 
@@ -170,7 +190,10 @@ def from_model(query, data, rules):
     if parsed.min_price and parsed.max_price and parsed.min_price > parsed.max_price:
         parsed.min_price, parsed.max_price = parsed.max_price, parsed.min_price
 
-    parsed.model_query = _text(data.get("search_query"), 80)
+    # With specs written as numbers, a query built from them ("hp laptop 8GB
+    # RAM 500GB") finds more listings that state them than the model's
+    # wording does; the model's query helps with everything else.
+    parsed.model_query = None if rules.specs else _text(data.get("search_query"), 80)
     parsed.read_by_model = True
     return parsed
 
