@@ -60,6 +60,22 @@ export async function streamSearch(file, onEvent, query) {
   await readEventStream(response, onEvent);
 }
 
+/**
+ * Find the outfit: identify every item the person wears, then stream
+ * shopping options per item ("items", then one "item" event each).
+ */
+export async function streamOutfit(file, onEvent) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await fetch(`${API_URL}/api/v1/outfit/stream`, {
+    method: "POST",
+    body: formData,
+  });
+
+  await readEventStream(response, onEvent);
+}
+
 /** Run a streamed search for a typed product description. */
 export async function streamTextSearch(query, onEvent) {
   const response = await fetch(`${API_URL}/api/v1/products/search-by-text/stream`, {

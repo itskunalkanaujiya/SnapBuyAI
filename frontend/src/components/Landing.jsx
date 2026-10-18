@@ -49,6 +49,11 @@ const FAQS = [
       "Yes, live. Tap \"Try live\" on sunglasses, glasses or a watch and SnapBuy opens your camera: the frames follow your face in 3D — turning with your head, arms running back to your ears — and the watch wraps around your wrist as you move. You can also use a photo, adjust the size and position, and save a picture. It runs entirely on your device — the camera feed is never uploaded.",
   },
   {
+    question: "Can SnapBuy find a whole outfit from one photo?",
+    answer:
+      "Yes. Upload a photo of someone and tap \"Find the outfit\". AI identifies each item they're wearing (top, trousers, shoes, watch, glasses, bag and more) and SnapBuy shows shopping options for every item separately, usually in a few seconds. Clothing in the results can be tried on too.",
+  },
+  {
     question: "Which stores does it search?",
     answer:
       "Any online store Google Lens finds — often Amazon, Flipkart, Myntra, AJIO, Meesho and Tata CLiQ, plus many smaller shops. Results are tuned for India.",
@@ -66,7 +71,7 @@ const FAQS = [
   {
     question: "What happens to my photo?",
     answer:
-      "It's sent to Google Lens only to run your search. To do that, it may sit for a few seconds at a private, unguessable temporary link, which is deleted as soon as the search starts; the SnapBuy server doesn't keep a copy. Your recent searches (with a small copy of each photo) and saved items stay in this browser only, and you can clear them at any time.",
+      "It's sent to Google Lens only to run your search (for \"Find the outfit\", to an AI model on Groq that lists the items instead). To do that, it may sit for a few seconds at a private, unguessable temporary link, which is deleted as soon as the search starts; the SnapBuy server doesn't keep a copy. Your recent searches (with a small copy of each photo) and saved items stay in this browser only, and you can clear them at any time.",
   },
   {
     question: "What kind of photo works best?",

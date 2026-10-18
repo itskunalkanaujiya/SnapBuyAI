@@ -36,6 +36,14 @@ and alike, as clear-lens holes or tinted areas), so the frame on the face is
 always the real product photo. Users can also use a photo, adjust size and
 position, and save a picture.
 
+**Find the outfit.** For a photo of a person, a vision model on Groq
+(Qwen3.8 27B, free tier; `backend/outfit_service.py`) lists everything they
+wear, each with a short shopping description and an approximate box, in
+about 1–1.5 s. Every item is then searched on Google Shopping (through
+Serper) in parallel, so a whole outfit takes about 4 s and uses no Google
+Lens searches. Results stream in item by item; the boxes give each item a
+thumbnail cropped from the photo.
+
 **Search providers.** Each search uses the provider that did best in our
 side-by-side tests: photo search uses Google Lens through **SearchApi.io**
 first (5–9 s where SerpApi took 9–41 s, same matches) while its credits last.
@@ -168,6 +176,7 @@ host.
 | `POST` | `/api/v1/products/recognize-image` | Identify the product only; returns the derived query and top Lens titles |
 | `POST` | `/api/v1/tryon` | Multipart: `person` (photo), `garment_url` (product image), `category` (`upper_body`, `lower_body` or `dresses`, from the product's `tryon_category`), optional `garment_name`; returns a JPEG |
 | `GET` | `/api/v1/tryon/overlay` | Query `url` (product image) and `category` (`glasses` or `watch`, from the product's `ar_category`); returns the photo as a PNG with its background removed, for the live try-on |
+| `POST` | `/api/v1/outfit/stream` | Upload a photo of a person (`file`); streams `stage`, `items` (identified items with `type`, `description`, `query`, `box` as fractions), one `item` per item with its `best_matches` and `cheapest_alternatives`, then `final` (or `error`). Needs `GROQ_API_KEY` |
 | `GET` | `/api/v1/usage` | Searches left: SerpApi plan, Serper credits (`text`, when `SERPER_API_KEY` is set) and SearchApi credits (`fast_photo`, when `SEARCHAPI_API_KEY` and `BLOB_READ_WRITE_TOKEN` are set) |
 | `GET` | `/health` | Health check |
 

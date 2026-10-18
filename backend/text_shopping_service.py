@@ -16,7 +16,7 @@ import statistics
 import requests
 
 from llm_query_parser import understand_query
-from query_understanding import requirements_score
+from query_understanding import parse_query, requirements_score
 from tryon_service import accessory_category, garment_category
 from image_shopping_service import (
     QUERY_STOPWORDS,
@@ -354,7 +354,7 @@ def build_shopping_product(item, query):
     }
 
 
-def search_products_by_text(query: str, max_results: int = 10) -> dict:
+def search_products_by_text(query: str, max_results: int = 10, understand: bool = True) -> dict:
     """
     Search Google Shopping for a typed query.
 
@@ -371,7 +371,9 @@ def search_products_by_text(query: str, max_results: int = 10) -> dict:
 
     # Read the request: "a laptop of 8gb ram with company hp" searches for
     # "hp laptop 8GB RAM" and ranks listings by how many requirements they meet.
-    parsed = understand_query(query)
+    # understand=False reads the query with rules only (no language model),
+    # for queries that are already clean searches.
+    parsed = understand_query(query) if understand else parse_query(query)
     structured = parsed.is_structured
     search_query = parsed.search_query if structured else query
     match_query = parsed.core_query if structured else query

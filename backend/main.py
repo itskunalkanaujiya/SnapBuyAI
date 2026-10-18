@@ -24,6 +24,7 @@ from image_shopping_service import (
     search_products_by_image as search_online_products,
 )
 from text_shopping_service import search_products_by_text as search_shopping_text
+from outfit_service import find_outfit
 from tryon_service import GARMENT_WORDS, TryOnError, product_overlay, try_on
 
 # --------------------------------------------------
@@ -554,7 +555,10 @@ def build_search_response(online_results: dict) -> dict:
 def cache_if_useful(cache_key, response):
     # Only cache searches that found something, so a temporary Lens
     # failure is retried next time.
-    if response["best_matches"] or response["cheapest_alternatives"]:
+    found = response.get("best_matches") or response.get("cheapest_alternatives")
+    # Outfits: cache when every item's search finished.
+    items = response.get("items") or []
+    if found or (items and not any(item.get("failed") for item in items)):
         store_cached_search(cache_key, response)
 
 
@@ -641,13 +645,16 @@ async def search_products_by_image_stream(
     )
 
 
-def stream_search_response(cache_key, cached, first_stage, run):
+def stream_search_response(cache_key, cached, first_stage, run, shape=None):
     """
     Stream a search as newline-delimited JSON events.
 
     run(emit) performs the blocking search in a worker thread and returns the
-    service result; emit(event_type, payload) sends progress events.
+    service result; emit(event_type, payload) sends progress events. shape
+    turns the result into the final response (default: product search).
+    Exceptions marked user_facing send their own message.
     """
+    shape = shape or build_search_response
     loop = asyncio.get_running_loop()
     queue = asyncio.Queue()
     done = object()
@@ -660,12 +667,13 @@ def stream_search_response(cache_key, cached, first_stage, run):
     def worker():
         try:
             emit("stage", {"stage": first_stage})
-            response = build_search_response(run(emit))
+            response = shape(run(emit))
             cache_if_useful(cache_key, response)
             emit("final", {**response, "cached": False})
         except Exception as exc:
             print(f"Online product search failed: {exc}")
-            emit("error", {"detail": ONLINE_SEARCH_ERROR})
+            detail = str(exc) if getattr(exc, "user_facing", False) else ONLINE_SEARCH_ERROR
+            emit("error", {"detail": detail})
         finally:
             loop.call_soon_threadsafe(queue.put_nowait, done)
 
@@ -871,3 +879,33 @@ async def try_on_overlay(request: Request, url: str, category: str):
     if centres:
         headers["X-Lens-Centres"] = ",".join(f"{value:.4f}" for value in centres)
     return Response(content=png, media_type="image/png", headers=headers)
+
+
+# --------------------------------------------------
+# Find the outfit
+# --------------------------------------------------
+
+
+@app.post("/api/v1/outfit/stream")
+async def find_outfit_stream(request: Request, file: UploadFile = File(...)):
+    """
+    Identify everything the person in the photo wears and find shopping
+    options for each item, streamed as newline-delimited JSON events:
+    "stage", "items" (the identified items with approximate boxes), one
+    "item" per item as its results arrive, then "final" (or "error").
+    """
+    image = await read_uploaded_image(file)
+    fingerprint = await run_in_threadpool(image_fingerprint, image)
+    cache_key = f"outfit:{fingerprint}"
+
+    cached = get_cached_search(cache_key)
+    if cached is None:
+        check_search_limit(request)
+
+    return stream_search_response(
+        cache_key,
+        cached,
+        first_stage="identifying",
+        run=lambda emit: find_outfit(image, on_event=emit),
+        shape=lambda outfit: outfit,
+    )

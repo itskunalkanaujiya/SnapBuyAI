@@ -95,6 +95,8 @@ export default function UploadPanel({
   onCrop,
   onUndoCrop,
   onSearch,
+  onFindOutfit,
+  isFindingOutfit = false,
 }) {
   const inputRef = useRef(null);
   const cameraRef = useRef(null);
@@ -288,9 +290,28 @@ export default function UploadPanel({
         )}
       </button>
 
+      <button
+        type="button"
+        className="button button-secondary search-button outfit-button"
+        onClick={onFindOutfit}
+        disabled={!file || isSearching || isFindingOutfit}
+      >
+        {isFindingOutfit ? (
+          <>
+            <span className="spinner" />
+            Finding the outfit…
+          </>
+        ) : (
+          <>
+            <Icon name="shirt" size={17} />
+            Find the outfit
+          </>
+        )}
+      </button>
+
       <p className="panel-footnote">
         <Icon name="shield" size={13} />
-        Your photo is sent to Google Lens only to run this search, and isn't kept.
+        Your photo is sent to Google Lens (or, to find the outfit, an AI model) only to run this search, and isn't kept.
       </p>
     </div>
   );

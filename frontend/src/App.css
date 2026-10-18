@@ -2673,6 +2673,118 @@ label.field input::placeholder {
   content: "";
 }
 
+/* ---------- Find the outfit ---------- */
+
+.outfit-button {
+  margin-top: -4px;
+}
+
+.outfit .results-header {
+  align-items: flex-start;
+}
+
+.outfit-subtitle {
+  margin-top: 6px;
+  color: var(--text-2);
+  font-size: 14px;
+}
+
+.outfit-photo {
+  width: 96px;
+  height: 128px;
+  flex: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  object-fit: cover;
+}
+
+.outfit-chips {
+  display: flex;
+  overflow-x: auto;
+  margin: 4px 0 18px;
+  padding-bottom: 4px;
+  gap: 10px;
+}
+
+.outfit-chip {
+  display: flex;
+  align-items: center;
+  flex: none;
+  padding: 6px 14px 6px 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  gap: 10px;
+  text-decoration: none;
+  transition: border-color 0.15s var(--ease);
+}
+
+.outfit-chip:hover {
+  border-color: var(--primary);
+}
+
+.outfit-chip span {
+  display: grid;
+  line-height: 1.25;
+}
+
+.outfit-chip strong {
+  font-size: 13.5px;
+}
+
+.outfit-chip small {
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.outfit-chip .outfit-thumb {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+}
+
+.outfit-thumb {
+  display: grid;
+  width: 56px;
+  height: 56px;
+  flex: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #ffffff;
+  object-fit: cover;
+  place-items: center;
+}
+
+.outfit-thumb-empty {
+  background: var(--surface-2);
+  color: var(--text-3);
+}
+
+.outfit-section {
+  scroll-margin-top: 80px;
+}
+
+.outfit-section-header {
+  align-items: center;
+}
+
+.outfit-section-header > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.outfit-empty {
+  display: flex;
+  align-items: center;
+  padding: 18px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  color: var(--text-3);
+  font-size: 13.5px;
+  gap: 8px;
+}
+
 /* ---------- Search quota ---------- */
 
 .search-quota {
@@ -3363,6 +3475,10 @@ label.field input::placeholder {
 
   .live-controls {
     grid-template-columns: 1fr;
+  }
+
+  .outfit-photo {
+    display: none;
   }
 
   .live-hint {

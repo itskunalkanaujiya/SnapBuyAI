@@ -9,6 +9,7 @@ import TextSearchPanel, { SearchModeTabs } from "./components/TextSearchPanel.js
 import TryOnDialog from "./components/TryOnDialog.jsx";
 import LiveTryOnDialog from "./components/LiveTryOnDialog.jsx";
 import SearchQuota from "./components/SearchQuota.jsx";
+import OutfitView from "./components/OutfitView.jsx";
 import ResultsView, { ResultsLoading } from "./components/ResultsView.jsx";
 import UploadPanel from "./components/UploadPanel.jsx";
 import {
@@ -19,7 +20,7 @@ import {
   writeHistory,
 } from "./lib/history.js";
 import { prepareForUpload } from "./lib/resizeImage.js";
-import { streamSearch, streamTextSearch } from "./lib/searchStream.js";
+import { streamOutfit, streamSearch, streamTextSearch } from "./lib/searchStream.js";
 import {
   ALLOWED_IMAGE_TYPES,
   DEFAULT_FILTERS,
@@ -97,6 +98,9 @@ export default function App() {
   const [error, setError] = useState("");
 
   const [results, setResults] = useState(null);
+  // Find the outfit: { gender, items, photoUrl } while shown.
+  const [outfit, setOutfit] = useState(null);
+  const [isFindingOutfit, setIsFindingOutfit] = useState(false);
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [saved, setSaved] = useState(readSaved);
   const [history, setHistory] = useState(readHistory);
@@ -142,11 +146,11 @@ export default function App() {
 
   // Bring results into view the first time they appear for a search.
   useEffect(() => {
-    if (results && !scrolledRef.current) {
+    if ((results || outfit) && !scrolledRef.current) {
       scrolledRef.current = true;
       resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }
-  }, [results]);
+  }, [results, outfit]);
 
   function advanceStage(next) {
     if (next <= stageRef.current) return;
@@ -182,6 +186,7 @@ export default function App() {
     setFile(nextFile);
     setPreviewUrl(URL.createObjectURL(nextFile));
     setResults(null);
+    setOutfit(null);
     setFilters(DEFAULT_FILTERS);
   }
 
@@ -262,6 +267,7 @@ export default function App() {
     setOriginalFile(null);
     setOriginalUrl("");
     setResults(null);
+    setOutfit(null);
     setFilters(DEFAULT_FILTERS);
     setError("");
   }
@@ -314,6 +320,7 @@ export default function App() {
 
     setError("");
     setResults(null);
+    setOutfit(null);
     setFilters(DEFAULT_FILTERS);
     setElapsed(0);
     setIdentifiedQuery("");
@@ -387,6 +394,75 @@ export default function App() {
     }
   }
 
+  // Identify everything the person in the photo wears and shop each item.
+  async function findOutfit() {
+    if (!file) {
+      setError("Please upload a photo of the outfit first.");
+      return;
+    }
+
+    setError("");
+    setResults(null);
+    setOutfit({ gender: "", items: [], photoUrl: previewUrl });
+    scrolledRef.current = false;
+    setIsFindingOutfit(true);
+
+    const updateItem = (item) =>
+      setOutfit((current) =>
+        current && {
+          ...current,
+          items: current.items.map((existing) =>
+            existing.id === item.id ? { ...item, pending: false } : existing
+          ),
+        }
+      );
+
+    try {
+      const upload = await prepareForUpload(file);
+      let finished = false;
+      await streamOutfit(upload, (event) => {
+        switch (event.type) {
+          case "items":
+            setOutfit((current) => ({
+              ...current,
+              gender: event.gender,
+              items: event.items.map((item) => ({ ...item, pending: true })),
+            }));
+            break;
+          case "item":
+            updateItem(event.item);
+            break;
+          case "final":
+            finished = true;
+            setOutfit((current) => ({
+              ...current,
+              gender: event.gender,
+              items: event.items.map((item) => ({ ...item, pending: false })),
+            }));
+            break;
+          case "error":
+            throw new Error(event.detail || "Couldn't find the outfit. Please try again.");
+          default:
+            break;
+        }
+      });
+      if (!finished) throw new Error("The search ended unexpectedly. Please try again.");
+    } catch (outfitError) {
+      setOutfit((current) =>
+        current?.items.length
+          ? { ...current, items: current.items.map((item) => ({ ...item, pending: false })) }
+          : null
+      );
+      setError(
+        outfitError instanceof TypeError
+          ? "Can't reach the SnapBuy server. Check that the backend is running."
+          : outfitError.message
+      );
+    } finally {
+      setIsFindingOutfit(false);
+    }
+  }
+
   // Search Google Shopping for a typed description.
   async function searchText(text) {
     const query = (typeof text === "string" ? text : textQuery).trim();
@@ -400,6 +476,7 @@ export default function App() {
     setTextQuery(query);
     setError("");
     setResults(null);
+    setOutfit(null);
     setFilters(DEFAULT_FILTERS);
     scrolledRef.current = false;
     setIsSearching(true);
@@ -531,6 +608,8 @@ export default function App() {
                     onCrop={() => setIsCropping(true)}
                     onUndoCrop={undoCrop}
                     onSearch={search}
+                    onFindOutfit={findOutfit}
+                    isFindingOutfit={isFindingOutfit}
                   />
                 ) : (
                   <TextSearchPanel
@@ -559,6 +638,17 @@ export default function App() {
             <div ref={resultsRef} className="results-anchor" />
 
             {isSearching && !results && <ResultsLoading />}
+
+            {outfit && (
+              <OutfitView
+                outfit={outfit}
+                photoUrl={outfit.photoUrl}
+                savedIds={savedIds}
+                onToggleSave={toggleSaved}
+                onTryOn={setTryOnProduct}
+                onMore={searchText}
+              />
+            )}
 
             {results && (
               <ResultsView
