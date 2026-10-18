@@ -48,6 +48,14 @@ fails or runs out. After Lens identifies a photo's product, a background
 Serper Shopping lookup fills prices Lens left out, from the same store's
 matching listing. The home screen shows the searches left on each.
 
+**Text search understands sentences.** "a laptop of 8gb ram with 500gb
+storage and company hp under 50k" is read (`backend/query_understanding.py`)
+as brand HP, product laptop, 8 GB RAM, ~500 GB storage and a ₹50,000 budget:
+Google Shopping is searched for "hp laptop 8GB RAM 500GB", the budget is a
+hard limit, and listings are ranked by how many requirements their titles
+meet (512 GB counts as ~500 GB). The results page shows what was understood.
+Plain keyword searches work as before.
+
 **Text search** sends the typed query to Google Shopping:
 top results keep Google's relevance order, and Lowest Prices are the
 cheapest listings that still contain most of the query's words. Listings
@@ -147,9 +155,9 @@ host.
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/api/v1/products/search-by-image` | Upload an image (`file`, JPEG/PNG/WebP, max 8 MB) and optionally a `query` (up to 100 characters, e.g. a brand or model) to narrow the Lens search; returns `best_matches` and `cheapest_alternatives` |
+| `POST` | `/api/v1/products/search-by-image` | Upload an image (`file`, JPEG/PNG/WebP, max 8 MB) and optionally a `query` (up to 150 characters, e.g. a brand or model) to narrow the Lens search; returns `best_matches` and `cheapest_alternatives` |
 | `POST` | `/api/v1/products/search-by-image/stream` | Same search as newline-delimited JSON events: `stage`, `identified`, `preview` (ranked listings with Google Lens prices; `pending: true` while a seller page is still being checked), then `final` (same body as above) or `error`. Used by the web app. |
-| `POST` | `/api/v1/products/search-by-text` | JSON body `{"query": "..."}` (2–100 characters); searches Google Shopping and returns the same sections as the photo search |
+| `POST` | `/api/v1/products/search-by-text` | JSON body `{"query": "..."}` (2–150 characters, keywords or a sentence like "hp laptop with 8gb ram under 50k"); searches Google Shopping and returns the same sections as the photo search, plus `understood` (what a sentence was read as) |
 | `POST` | `/api/v1/products/search-by-text/stream` | Same, streamed as `stage` then `final` (or `error`) events |
 | `POST` | `/api/v1/products/recognize-image` | Identify the product only; returns the derived query and top Lens titles |
 | `POST` | `/api/v1/tryon` | Multipart: `person` (photo), `garment_url` (product image), `category` (`upper_body`, `lower_body` or `dresses`, from the product's `tryon_category`), optional `garment_name`; returns a JPEG |

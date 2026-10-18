@@ -2,11 +2,11 @@ import { useRef } from "react";
 import Icon from "./Icon.jsx";
 
 const EXAMPLES = [
+  "HP laptop with 8GB RAM and 512GB SSD under 50k",
+  "Samsung 5G phone with 6000mAh battery under 20000",
   "Casio G-Shock green watch",
   "Nike running shoes for men",
-  "boAt wireless earbuds",
   "Cotton kurti for women",
-  "Prestige pressure cooker 5L",
 ];
 
 /** Photo / Text switch shown at the top of both search panels. */
@@ -70,9 +70,9 @@ export default function TextSearchPanel({
           <input
             ref={inputRef}
             value={query}
-            maxLength={100}
+            maxLength={150}
             onChange={(event) => onQueryChange(event.target.value)}
-            placeholder="e.g. Casio G-Shock green watch"
+            placeholder="e.g. HP laptop with 8GB RAM under 50k"
             aria-label="What are you looking for?"
             disabled={isSearching}
           />

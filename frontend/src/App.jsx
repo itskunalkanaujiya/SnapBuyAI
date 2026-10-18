@@ -57,6 +57,7 @@ function toResults(data, kind = "photo") {
   return {
     kind,
     query: data.online_search_query || "",
+    understood: Array.isArray(data.understood) ? data.understood : null,
     bestMatches: Array.isArray(data.best_matches) ? data.best_matches : [],
     cheapest: Array.isArray(data.cheapest_alternatives) ? data.cheapest_alternatives : [],
   };
@@ -569,6 +570,7 @@ export default function App() {
                 }
                 onRefine={results.kind === "text" ? searchText : search}
                 query={results.query}
+                understood={results.understood}
                 bestMatches={results.bestMatches}
                 cheapest={results.cheapest}
                 filters={filters}

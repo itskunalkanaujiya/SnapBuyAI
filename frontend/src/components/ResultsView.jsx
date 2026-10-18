@@ -161,7 +161,7 @@ function RefineForm({ query, onSubmit, onCancel }) {
         <input
           autoFocus
           value={text}
-          maxLength={100}
+          maxLength={150}
           onChange={(event) => setText(event.target.value)}
           onKeyDown={(event) => event.key === "Escape" && onCancel()}
           placeholder="e.g. Casio G-Shock MTG-B3000 green"
@@ -206,6 +206,7 @@ export default function ResultsView({
   onRefine,
   kind = "photo",
   query,
+  understood,
   bestMatches,
   cheapest,
   filters,
@@ -296,6 +297,19 @@ export default function ResultsView({
                 </button>
               )}
             </h2>
+          )}
+          {understood?.length > 0 && !isRefining && (
+            <ul className="understood" aria-label="Your search was understood as">
+              <li className="understood-label">
+                <Icon name="sparkles" size={13} />
+                Understood as
+              </li>
+              {understood.map((part) => (
+                <li key={part} className="understood-chip">
+                  {part}
+                </li>
+              ))}
+            </ul>
           )}
         </div>
 

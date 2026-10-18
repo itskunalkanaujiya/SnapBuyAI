@@ -487,7 +487,7 @@ def check_search_limit(request: Request):
 # --------------------------------------------------
 
 
-MAX_QUERY_LENGTH = 100
+MAX_QUERY_LENGTH = 150  # room for a full sentence: "an hp laptop with 8gb ram..."
 
 
 def clean_query(query: str | None) -> str | None:
@@ -540,6 +540,8 @@ def build_search_response(online_results: dict) -> dict:
         # Combined online count.
         "online_count": len(best_matches) + len(cheapest_alternatives),
         "online_search_query": query,
+        # Text search: what a natural-language request was understood as.
+        "understood": online_results.get("understood"),
         "note": (
             "Best Matches are ranked by visual similarity and text relevance. "
             "Cheapest Alternatives are sorted by known numeric price. "

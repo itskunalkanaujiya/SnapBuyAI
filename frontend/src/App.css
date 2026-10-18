@@ -1108,6 +1108,40 @@ kbd {
   text-transform: capitalize;
 }
 
+.understood {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: 12px 0 0;
+  padding: 0;
+  gap: 6px;
+  list-style: none;
+}
+
+.understood-label {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 2px;
+  color: var(--text-3);
+  font-size: 12.5px;
+  font-weight: 600;
+  gap: 5px;
+}
+
+.understood-label .icon {
+  color: var(--primary);
+}
+
+.understood-chip {
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
 .refine-button {
   font-size: 13px;
   letter-spacing: 0;

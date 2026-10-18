@@ -15,6 +15,7 @@ import statistics
 
 import requests
 
+from query_understanding import parse_query, requirements_score
 from tryon_service import accessory_category, garment_category
 from image_shopping_service import (
     QUERY_STOPWORDS,
@@ -367,14 +368,24 @@ def search_products_by_text(query: str, max_results: int = 10) -> dict:
     if not query:
         raise ValueError("Search query cannot be empty.")
 
-    results, provider = fetch_shopping_results(query)
+    # Read the request: "a laptop of 8gb ram with company hp" searches for
+    # "hp laptop 8GB RAM" and ranks listings by how many requirements they meet.
+    parsed = parse_query(query)
+    structured = parsed.is_structured
+    search_query = parsed.search_query if structured else query
+    match_query = parsed.core_query if structured else query
+
+    results, provider = fetch_shopping_results(search_query)
 
     products = []
     seen_titles = set()
     for item in results:
         if not isinstance(item, dict):
             continue
-        product = build_shopping_product(item, query)
+        product = build_shopping_product(item, match_query)
+        product["requirements_score"] = (
+            requirements_score(parsed, product["name"], product["marketplace"]) if structured else None
+        )
 
         # Skip sponsored blocks and listings without a price or link.
         if product["price"] is None or not product["product_url"]:
@@ -389,9 +400,24 @@ def search_products_by_text(query: str, max_results: int = 10) -> dict:
         seen_titles.add(key)
         products.append(product)
 
+    # A budget is a hard limit.
+    if parsed.max_price is not None:
+        products = [p for p in products if p["price"] <= parsed.max_price]
+    if parsed.min_price is not None:
+        products = [p for p in products if p["price"] >= parsed.min_price]
+
     relevant = [p for p in products if p["text_relevance_score"] >= MIN_RELEVANCE]
     if len(relevant) < MIN_RESULTS_BEFORE_RELAXING:
         relevant = [p for p in products if p["text_relevance_score"] >= RELAXED_RELEVANCE]
+
+    if structured and (parsed.specs or parsed.features or parsed.brand):
+        # Listings meeting none of the requirements are dropped while enough
+        # others remain; the rest are ranked by requirements met, keeping
+        # Google's order among equals.
+        meeting = [p for p in relevant if p["requirements_score"]]
+        if len(meeting) >= MIN_RESULTS_BEFORE_RELAXING:
+            relevant = meeting
+        relevant.sort(key=lambda p: (-(p["requirements_score"] or 0), p["condition"] is not None))
 
     typical_price = statistics.median(p["price"] for p in relevant) if relevant else None
 
@@ -426,7 +452,7 @@ def search_products_by_text(query: str, max_results: int = 10) -> dict:
 
     print(
         f"Google Shopping: {len(results)} results, {len(products)} unique, "
-        f"{len(relevant)} relevant for {query!r}."
+        f"{len(relevant)} relevant for {search_query!r}."
     )
 
     return {
@@ -435,4 +461,7 @@ def search_products_by_text(query: str, max_results: int = 10) -> dict:
         "online_count": len(best_matches) + len(cheapest_alternatives),
         "online_search_query": query,
         "search_provider": provider,
+        "search_query_used": search_query,
+        # What the request was understood as, for the results page.
+        "understood": parsed.summary() if structured else None,
     }

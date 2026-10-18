@@ -36,7 +36,7 @@ const FAQS = [
   {
     question: "Can I search without a photo?",
     answer:
-      "Yes. Switch the search panel to Text and type what you're looking for, like \"Casio G-Shock green watch\". SnapBuy searches Google Shopping across Indian stores and shows the top results and the lowest prices, with ratings and discounts where stores list them.",
+      "Yes. Switch the search panel to Text and type what you're looking for: keywords like \"Casio G-Shock green watch\", or a full sentence like \"an HP laptop with 8GB RAM and 512GB storage under 50k\". SnapBuy understands the brand, specs and budget, searches Google Shopping across Indian stores, and ranks listings by how many of your requirements they meet.",
   },
   {
     question: "Can I see how clothes look on me?",
