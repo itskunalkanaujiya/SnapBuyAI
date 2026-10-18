@@ -10,6 +10,7 @@ import TryOnDialog from "./components/TryOnDialog.jsx";
 import LiveTryOnDialog from "./components/LiveTryOnDialog.jsx";
 import SearchQuota from "./components/SearchQuota.jsx";
 import OutfitView from "./components/OutfitView.jsx";
+import HeroHeadline from "./components/HeroHeadline.jsx";
 import ResultsView, { ResultsLoading } from "./components/ResultsView.jsx";
 import UploadPanel from "./components/UploadPanel.jsx";
 import {
@@ -41,10 +42,18 @@ function readSaved() {
   }
 }
 
-const FEATURES = [
-  { icon: "scan", text: "Identifies products automatically" },
-  { icon: "tag", text: "Compares prices across stores" },
-  { icon: "box", text: "Shows stock availability" },
+// Shortcuts in the hero: each opens the matching search panel.
+const WAYS = [
+  { mode: "photo", icon: "camera", label: "Photo search" },
+  { mode: "text", icon: "search", label: "Describe it" },
+  { mode: "outfit", icon: "shirt", label: "Find the outfit", isNew: true },
+  { mode: "tryon", icon: "sparkles", label: "Try it on" },
+];
+
+const HIGHLIGHTS = [
+  { icon: "trendDown", text: "Lowest prices across stores" },
+  { icon: "sparkles", text: "AI that understands photos and sentences" },
+  { icon: "shield", text: "Free, no sign-up" },
 ];
 
 // Stores that regularly appear in SnapBuy results, shown as plain text.
@@ -300,11 +309,26 @@ export default function App() {
   }
 
   // Bring the search panel into view from the call-to-action at the bottom.
-  function goToSearch() {
-    panelRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-    panelRef.current
-      ?.querySelector(".dropzone, .text-search-field input, .search-button")
-      ?.focus({ preventScroll: true });
+  // Open the search panel, optionally in a mode: "photo", "text",
+  // "outfit" (photo, pointing at Find the outfit) or "tryon" (an example
+  // search whose clothes can be tried on).
+  function goToSearch(nextMode) {
+    if (nextMode === "tryon") {
+      searchText("Cotton kurti for women");
+      return;
+    }
+    if (nextMode === "text" || nextMode === "photo" || nextMode === "outfit") {
+      changeMode(nextMode === "text" ? "text" : "photo");
+    }
+    // Wait a frame so a newly shown panel can take focus.
+    requestAnimationFrame(() => {
+      panelRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      const target =
+        nextMode === "outfit" && file
+          ? ".outfit-button"
+          : ".dropzone, .text-search-field input, .search-button";
+      panelRef.current?.querySelector(target)?.focus({ preventScroll: true });
+    });
     setHighlightPanel(true);
     setTimeout(() => setHighlightPanel(false), 1600);
   }
@@ -559,26 +583,40 @@ export default function App() {
                 <div className="hero-copy">
                   <span className="pill pill-outline">
                     <span className="pill-dot" />
-                    Visual product search for India
+                    AI shopping assistant for India
                   </span>
 
-                  <h1>
-                    Find any product
-                    <br />
-                    <span className="accent">from a single photo.</span>
-                  </h1>
+                  <HeroHeadline />
 
                   <p className="hero-lead">
-                    Upload a picture — or just type what you're looking for —
-                    and SnapBuy finds matching listings across online stores
-                    and shows you where it's cheapest.
+                    Upload a picture, describe it in your own words, or shop a
+                    whole outfit. SnapBuy finds it across online stores, shows
+                    where it's cheapest, and lets you try it on.
                   </p>
 
-                  <ul className="feature-list">
-                    {FEATURES.map((feature) => (
+                  <div className="ways" role="group" aria-label="Ways to shop">
+                    {WAYS.map((way, index) => (
+                      <button
+                        key={way.mode}
+                        type="button"
+                        className="way-chip"
+                        style={{ "--i": index }}
+                        onClick={() => goToSearch(way.mode)}
+                      >
+                        <span className="way-icon">
+                          <Icon name={way.icon} size={15} />
+                        </span>
+                        {way.label}
+                        {way.isNew && <span className="new-pill">New</span>}
+                      </button>
+                    ))}
+                  </div>
+
+                  <ul className="feature-list hero-highlights">
+                    {HIGHLIGHTS.map((feature) => (
                       <li key={feature.text}>
                         <span className="feature-icon">
-                          <Icon name={feature.icon} size={15} />
+                          <Icon name={feature.icon} size={14} />
                         </span>
                         {feature.text}
                       </li>
@@ -682,7 +720,7 @@ export default function App() {
               />
             )}
 
-            {!results && !isSearching && <Landing onStart={goToSearch} />}
+            {!results && !isSearching && <Landing onStart={goToSearch} onExample={searchText} />}
           </>
         ) : (
           <section className="saved container">

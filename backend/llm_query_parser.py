@@ -82,6 +82,9 @@ Rules:
 - Keep the brand exactly as the customer wrote it, in lower case."""
 
 
+# Wishes that are really specs ("ssd", "8gb ram") are dropped.
+SPEC_WORDS = re.compile(r"\d|\b(ssd|hdd|ram|rom|storage|memory|gb|tb|mah|mp|inch(es)?|hz|watts?)\b")
+
 _cache = OrderedDict()
 _cache_lock = threading.Lock()
 
@@ -176,7 +179,12 @@ def from_model(query, data, rules):
     for feature in data.get("features") or []:
         feature = _text(feature, 25)
         known = {f.replace(" ", "") for f in parsed.features + parsed.wishes}
-        if feature and feature.replace(" ", "") not in known and feature not in (parsed.product or ""):
+        if (
+            feature
+            and feature.replace(" ", "") not in known
+            and feature not in (parsed.product or "")
+            and not SPEC_WORDS.search(feature)  # specs are read by the rules
+        ):
             parsed.wishes.append(feature)
     parsed.wishes = parsed.wishes[:3]
 

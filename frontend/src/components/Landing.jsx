@@ -1,4 +1,6 @@
+import { useEffect } from "react";
 import Icon from "./Icon.jsx";
+import Showcase from "./Showcase.jsx";
 
 // Prices from a real SnapBuy search for a G-Shock style watch (Oct 2026),
 // used to illustrate the features. Live prices will differ.
@@ -12,20 +14,43 @@ const EXAMPLE_PRICES = [
 const STEPS = [
   {
     icon: "upload",
-    title: "Upload a photo",
-    text: "Snap a picture, upload one, or paste it straight from your clipboard.",
+    title: "Snap, paste or describe",
+    text: "Upload a product or outfit photo, paste a screenshot, or just type what you want in your own words.",
   },
   {
     icon: "sparkles",
-    title: "We identify it",
-    text: "Google Lens recognises the product and AI ranks every listing by how closely it matches.",
+    title: "AI understands it",
+    text: "Google Lens and AI models recognise the product, every piece of an outfit, or the specs and budget you typed.",
   },
   {
     icon: "tag",
-    title: "Compare and buy",
-    text: "Check prices and stock side by side, then buy from the seller you trust.",
+    title: "Compare, try on, buy",
+    text: "See prices and stock across stores, try clothes and glasses on yourself, then buy from the seller you trust.",
   },
 ];
+
+/** Fade sections in as they scroll into view. */
+function useReveal() {
+  useEffect(() => {
+    const nodes = document.querySelectorAll(".reveal:not(.is-visible)");
+    if (typeof IntersectionObserver === "undefined") {
+      nodes.forEach((node) => node.classList.add("is-visible"));
+      return undefined;
+    }
+    const observer = new IntersectionObserver(
+      (entries) =>
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("is-visible");
+            observer.unobserve(entry.target);
+          }
+        }),
+      { threshold: 0.12, rootMargin: "0px 0px -40px 0px" }
+    );
+    nodes.forEach((node) => observer.observe(node));
+    return () => observer.disconnect();
+  }, []);
+}
 
 const FAQS = [
   {
@@ -100,7 +125,7 @@ function BentoCard({ icon, title, text, className = "", children }) {
 function Features() {
   return (
     <section className="landing-section container" aria-labelledby="features-title">
-      <div className="section-intro section-intro-center">
+      <div className="section-intro section-intro-center reveal">
         <span className="eyebrow">Why SnapBuy</span>
         <h2 id="features-title">Everything you need to shop smarter</h2>
         <p>
@@ -109,7 +134,7 @@ function Features() {
         </p>
       </div>
 
-      <div className="bento">
+      <div className="bento reveal">
         <BentoCard
           className="bento-wide"
           icon="scan"
@@ -218,12 +243,12 @@ function HowItWorks() {
   return (
     <section className="landing-section landing-band" aria-labelledby="how-title">
       <div className="container">
-        <div className="section-intro section-intro-center">
+        <div className="section-intro section-intro-center reveal">
           <span className="eyebrow">How it works</span>
-          <h2 id="how-title">From photo to best price in seconds</h2>
+          <h2 id="how-title">From idea to best price in seconds</h2>
         </div>
 
-        <ol className="timeline">
+        <ol className="timeline reveal">
           {STEPS.map((step, index) => (
             <li key={step.title} className="timeline-step">
               <span className="timeline-marker">
@@ -243,7 +268,7 @@ function HowItWorks() {
 function Faq() {
   return (
     <section className="landing-section container faq" aria-labelledby="faq-title">
-      <div className="faq-intro">
+      <div className="faq-intro reveal">
         <span className="eyebrow">FAQ</span>
         <h2 id="faq-title">Questions, answered</h2>
         <p>
@@ -252,7 +277,7 @@ function Faq() {
         </p>
       </div>
 
-      <div className="faq-list">
+      <div className="faq-list reveal">
         {FAQS.map((item, index) => (
           <details key={item.question} className="faq-item" open={index === 0}>
             <summary>
@@ -270,23 +295,31 @@ function Faq() {
 function CtaBand({ onStart }) {
   return (
     <section className="container landing-section-tight">
-      <div className="cta-band">
+      <div className="cta-band reveal">
         <div>
           <h2>Seen something you like?</h2>
-          <p>Snap it, upload it and find where it's cheapest — in seconds.</p>
+          <p>Snap it, describe it or shop the whole outfit, and find where it's cheapest in seconds.</p>
         </div>
-        <button type="button" className="button button-light button-lg" onClick={onStart}>
-          <Icon name="upload" size={18} />
-          Upload a photo
-        </button>
+        <div className="cta-actions">
+          <button type="button" className="button button-light button-lg" onClick={() => onStart("photo")}>
+            <Icon name="upload" size={18} />
+            Upload a photo
+          </button>
+          <button type="button" className="button button-outline-light button-lg" onClick={() => onStart("text")}>
+            <Icon name="search" size={18} />
+            Describe it
+          </button>
+        </div>
       </div>
     </section>
   );
 }
 
-export default function Landing({ onStart }) {
+export default function Landing({ onStart, onExample }) {
+  useReveal();
   return (
     <>
+      <Showcase onStart={onStart} onExample={onExample} />
       <Features />
       <HowItWorks />
       <Faq />

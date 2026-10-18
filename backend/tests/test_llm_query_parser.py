@@ -136,3 +136,12 @@ def test_written_specs_keep_the_precise_query(monkeypatch):
     parsed = llm.understand_query("a laptop of 8gb ram with 500gb storage and company hp")
     assert parsed.read_by_model
     assert parsed.search_query == "hp laptop 8GB RAM 500GB"
+
+
+def test_spec_words_are_not_wishes(monkeypatch):
+    monkeypatch.setenv("GROQ_API_KEY", "k")
+    monkeypatch.setattr(llm.requests, "post", lambda *a, **k: model_reply({
+        "product": "laptop", "brand": "hp", "features": ["ssd", "8gb ram", "thin and light"],
+    }))
+    parsed = llm.understand_query("an hp laptop with 8gb ram and 512gb ssd under 50k")
+    assert parsed.wishes == ["thin and light"]
