@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Icon from "./Icon.jsx";
 import ProductCard, { ProductCardSkeleton } from "./ProductCard.jsx";
-import { getProductId } from "../lib/products.js";
+import { formatAmount, getNumericPrice, getProductId } from "../lib/products.js";
 
 const THUMBNAIL_SIZE = 160;
 const BOX_PADDING = 0.15; // share of the box added on each side
@@ -24,8 +24,8 @@ function useItemThumbnails(photoUrl, items) {
         const padY = (y2 - y1) * BOX_PADDING;
         const left = Math.max(0, x1 - padX) * image.naturalWidth;
         const top = Math.max(0, y1 - padY) * image.naturalHeight;
-        const width = (Math.min(1, x2 + padX) * image.naturalWidth) - left;
-        const height = (Math.min(1, y2 + padY) * image.naturalHeight) - top;
+        const width = Math.min(1, x2 + padX) * image.naturalWidth - left;
+        const height = Math.min(1, y2 + padY) * image.naturalHeight - top;
         // Square crop around the box centre, so thumbnails line up.
         const side = Math.max(width, height);
         const canvas = document.createElement("canvas");
@@ -63,29 +63,103 @@ function capitalise(text) {
   return text ? text[0].toUpperCase() + text.slice(1) : "";
 }
 
-function ItemThumb({ src }) {
+/** Every option for an item, without repeats. */
+function itemProducts(item) {
+  const unique = new Map();
+  [...(item.best_matches || []), ...(item.cheapest_alternatives || [])].forEach((product) =>
+    unique.set(getProductId(product), product)
+  );
+  return [...unique.values()];
+}
+
+/** Lowest known price among an item's options, or null. */
+function lowestPrice(item) {
+  const prices = itemProducts(item)
+    .map(getNumericPrice)
+    .filter((price) => price !== null);
+  return prices.length ? Math.min(...prices) : null;
+}
+
+function scrollToItem(id) {
+  document.getElementById(`outfit-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function ItemThumb({ src, className = "" }) {
   return src ? (
-    <img className="outfit-thumb" src={src} alt="" />
+    <img className={`outfit-thumb ${className}`} src={src} alt="" />
   ) : (
-    <span className="outfit-thumb outfit-thumb-empty" aria-hidden="true">
+    <span className={`outfit-thumb outfit-thumb-empty ${className}`} aria-hidden="true">
       <Icon name="shirt" size={18} />
     </span>
   );
 }
 
-function ItemSection({ item, thumbnail, savedIds, onToggleSave, onTryOn, onMore }) {
-  const products = item.best_matches || [];
+/** The photo with a numbered marker on each item and the active item outlined. */
+function OutfitPhoto({ photoUrl, items, activeId, onActivate, scanning }) {
+  const active = items.find((item) => item.id === activeId && item.box);
 
   return (
-    <section className="result-section outfit-section" id={`outfit-${item.id}`}>
-      <header className="section-header outfit-section-header">
+    <div className={`outfit-photo-frame ${scanning ? "is-scanning" : ""}`}>
+      <img src={photoUrl} alt="Your outfit photo" />
+      {scanning && <span className="scan-line" aria-hidden="true" />}
+      {active && (
+        <span
+          className="outfit-box"
+          aria-hidden="true"
+          style={{
+            left: `${active.box[0] * 100}%`,
+            top: `${active.box[1] * 100}%`,
+            width: `${(active.box[2] - active.box[0]) * 100}%`,
+            height: `${(active.box[3] - active.box[1]) * 100}%`,
+          }}
+        />
+      )}
+      {items.map((item, index) =>
+        item.box ? (
+          <button
+            key={item.id}
+            type="button"
+            className={`outfit-marker ${item.id === activeId ? "is-active" : ""}`}
+            style={{
+              left: `${((item.box[0] + item.box[2]) / 2) * 100}%`,
+              top: `${((item.box[1] + item.box[3]) / 2) * 100}%`,
+            }}
+            onMouseEnter={() => onActivate(item.id)}
+            onFocus={() => onActivate(item.id)}
+            onClick={() => scrollToItem(item.id)}
+            aria-label={`${capitalise(item.type)}: see options`}
+          >
+            {index + 1}
+          </button>
+        ) : null
+      )}
+    </div>
+  );
+}
+
+function ItemSection({ item, index, thumbnail, savedIds, onToggleSave, onTryOn, onMore }) {
+  const products = itemProducts(item);
+  const lowest = lowestPrice(item);
+
+  return (
+    <section className="outfit-section" id={`outfit-${item.id}`}>
+      <header className="outfit-section-header">
+        <span className="outfit-number" aria-hidden="true">
+          {index + 1}
+        </span>
         <ItemThumb src={thumbnail} />
-        <div>
+        <div className="outfit-section-title">
           <h3>{capitalise(item.type)}</h3>
           <p>{capitalise(item.description)}</p>
         </div>
+        {!item.pending && lowest !== null && (
+          <span className="outfit-from">
+            <small>from</small>
+            {formatAmount(lowest)}
+          </span>
+        )}
         {!item.pending && products.length > 0 && (
-          <button type="button" className="button button-ghost button-sm" onClick={() => onMore(item.query)}>
+          <button type="button" className="button button-ghost button-sm outfit-more" onClick={() => onMore(item.query)}>
             More like this
             <Icon name="arrowRight" size={14} />
           </button>
@@ -93,27 +167,33 @@ function ItemSection({ item, thumbnail, savedIds, onToggleSave, onTryOn, onMore 
       </header>
 
       {item.pending ? (
-        <div className="product-grid" aria-busy="true">
-          {Array.from({ length: 4 }, (_, index) => (
-            <ProductCardSkeleton key={index} />
+        <div className="outfit-scroller" aria-busy="true" aria-label="Finding options">
+          {Array.from({ length: 4 }, (_, skeleton) => (
+            <ProductCardSkeleton key={skeleton} />
           ))}
         </div>
       ) : products.length ? (
-        <div className="product-grid">
-          {products.map((product, index) => (
+        <div className="outfit-scroller">
+          {products.map((product, position) => (
             <ProductCard
-              key={getProductId(product) || index}
+              key={getProductId(product) || position}
               product={product}
               isSaved={savedIds.has(getProductId(product))}
               onToggleSave={onToggleSave}
               onTryOn={onTryOn}
+              highlight={getNumericPrice(product) === lowest && lowest !== null ? "Lowest" : null}
             />
           ))}
         </div>
       ) : (
         <p className="outfit-empty">
           <Icon name="alert" size={15} />
-          {item.failed ? "Couldn't search for this item right now." : "No matching listings found for this item."}
+          {item.failed
+            ? "Couldn't search for this item right now. Try again in a moment."
+            : "No matching listings found for this item."}
+          <button type="button" className="button button-ghost button-sm" onClick={() => onMore(item.query)}>
+            Search “{item.query}”
+          </button>
         </p>
       )}
     </section>
@@ -121,62 +201,121 @@ function ItemSection({ item, thumbnail, savedIds, onToggleSave, onTryOn, onMore 
 }
 
 /**
- * Results of "Find the outfit": the identified items as chips, then one
- * section of shopping options per item.
+ * Results of "Find the outfit": the photo with a marker on every item, a
+ * summary with the price of the whole look, then a swipeable row of
+ * shopping options per item.
  */
 export default function OutfitView({ outfit, photoUrl, savedIds, onToggleSave, onTryOn, onMore }) {
-  const items = outfit.items || [];
+  const items = useMemo(() => outfit.items || [], [outfit.items]);
   const thumbnails = useItemThumbnails(photoUrl, items);
+  const [activeId, setActiveId] = useState(null);
+
+  const scanning = items.length === 0;
   const remaining = items.filter((item) => item.pending).length;
+  const lookPrices = items.map(lowestPrice).filter((price) => price !== null);
+  const lookTotal = lookPrices.reduce((sum, price) => sum + price, 0);
+  const audience = outfit.gender && outfit.gender !== "unisex" ? outfit.gender : "";
 
   return (
-    <section className="results container outfit">
-      <div className="results-header">
-        <div className="results-title">
+    <section className="results container outfit" onMouseLeave={() => setActiveId(null)}>
+      <div className="outfit-summary">
+        {photoUrl && (
+          <OutfitPhoto
+            photoUrl={photoUrl}
+            items={items}
+            activeId={activeId}
+            onActivate={setActiveId}
+            scanning={scanning}
+          />
+        )}
+
+        <div className="outfit-overview">
           <span className="eyebrow">Find the outfit</span>
-          <h2>
-            {items.length ? `${items.length} item${items.length === 1 ? "" : "s"} in this outfit` : "Identifying the outfit…"}
-          </h2>
-          {outfit.gender && outfit.gender !== "unisex" && (
-            <p className="outfit-subtitle">Shopping options for {outfit.gender}, item by item.</p>
+          {scanning ? (
+            <>
+              <h2>Looking at the outfit…</h2>
+              <p className="outfit-lead">
+                AI is spotting each item they're wearing. This usually takes a couple of seconds.
+              </p>
+              <div className="outfit-list" aria-hidden="true">
+                {Array.from({ length: 3 }, (_, index) => (
+                  <span key={index} className="outfit-row outfit-row-skeleton">
+                    <span className="outfit-thumb shimmer" />
+                    <span className="skeleton-line shimmer" style={{ width: `${60 - index * 10}%` }} />
+                  </span>
+                ))}
+              </div>
+            </>
+          ) : (
+            <>
+              <h2>
+                {items.length} item{items.length === 1 ? "" : "s"} spotted
+              </h2>
+              <p className="outfit-lead">
+                {remaining > 0
+                  ? `Finding shopping options for ${remaining} item${remaining === 1 ? "" : "s"}…`
+                  : `Tap an item to see its options${audience ? ` for ${audience}` : ""}.`}
+              </p>
+
+              {remaining === 0 && lookPrices.length > 1 && (
+                <div className="outfit-total">
+                  <Icon name="tag" size={18} />
+                  <span>
+                    Get the whole look from <strong>{formatAmount(lookTotal)}</strong>
+                    <small>
+                      Cheapest option for {lookPrices.length === items.length ? "every" : `${lookPrices.length} of ${items.length}`} item
+                      {lookPrices.length === items.length ? "" : "s"}
+                    </small>
+                  </span>
+                </div>
+              )}
+
+              <ol className="outfit-list">
+                {items.map((item, index) => {
+                  const lowest = lowestPrice(item);
+                  return (
+                    <li key={item.id}>
+                      <button
+                        type="button"
+                        className={`outfit-row ${item.id === activeId ? "is-active" : ""}`}
+                        onMouseEnter={() => setActiveId(item.id)}
+                        onFocus={() => setActiveId(item.id)}
+                        onClick={() => scrollToItem(item.id)}
+                      >
+                        <span className="outfit-number">{index + 1}</span>
+                        <ItemThumb src={thumbnails[item.id]} />
+                        <span className="outfit-row-text">
+                          <strong>{capitalise(item.type)}</strong>
+                          <small>{capitalise(item.description)}</small>
+                        </span>
+                        <span className="outfit-row-price">
+                          {item.pending ? (
+                            <span className="spinner" aria-label="Searching" />
+                          ) : lowest !== null ? (
+                            <>
+                              <small>from</small>
+                              {formatAmount(lowest)}
+                            </>
+                          ) : (
+                            <small>No results</small>
+                          )}
+                        </span>
+                        <Icon name="arrowRight" size={15} className="outfit-row-arrow" />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ol>
+            </>
           )}
         </div>
-        {photoUrl && <img className="outfit-photo" src={photoUrl} alt="Your outfit photo" />}
       </div>
 
-      {items.length > 0 && (
-        <nav className="outfit-chips" aria-label="Items in this outfit">
-          {items.map((item) => (
-            <a key={item.id} className="outfit-chip" href={`#outfit-${item.id}`}>
-              <ItemThumb src={thumbnails[item.id]} />
-              <span>
-                <strong>{capitalise(item.type)}</strong>
-                <small>{item.pending ? "Searching…" : `${(item.best_matches || []).length} options`}</small>
-              </span>
-            </a>
-          ))}
-        </nav>
-      )}
-
-      {remaining > 0 && (
-        <div className="updating-banner" role="status">
-          <span className="spinner" />
-          Finding shopping options for {remaining} item{remaining === 1 ? "" : "s"}…
-        </div>
-      )}
-
-      {items.length === 0 && (
-        <div className="product-grid" aria-busy="true">
-          {Array.from({ length: 4 }, (_, index) => (
-            <ProductCardSkeleton key={index} />
-          ))}
-        </div>
-      )}
-
-      {items.map((item) => (
+      {items.map((item, index) => (
         <ItemSection
           key={item.id}
           item={item}
+          index={index}
           thumbnail={thumbnails[item.id]}
           savedIds={savedIds}
           onToggleSave={onToggleSave}

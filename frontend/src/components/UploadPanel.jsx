@@ -305,6 +305,7 @@ export default function UploadPanel({
           <>
             <Icon name="shirt" size={17} />
             Find the outfit
+            <span className="new-pill">New</span>
           </>
         )}
       </button>
