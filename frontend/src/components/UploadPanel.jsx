@@ -290,7 +290,7 @@ export default function UploadPanel({
 
       <p className="panel-footnote">
         <Icon name="shield" size={13} />
-        Your photo is sent to Google Lens only to run this search.
+        Your photo is sent to Google Lens only to run this search, and isn't kept.
       </p>
     </div>
   );

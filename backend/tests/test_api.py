@@ -252,7 +252,7 @@ def test_usage_reports_searches_left_and_is_cached(monkeypatch):
 
     assert first == {
         "searches_left": 167, "searches_per_month": 250, "used_this_month": 83,
-        "renews_on": "2026-11-09", "plan": "Free Plan", "text": None,
+        "renews_on": "2026-11-09", "plan": "Free Plan", "text": None, "fast_photo": None,
     }
     assert len(calls) == 1  # cached; the API key is never returned
 
@@ -280,3 +280,80 @@ def test_usage_includes_serper_credits(monkeypatch):
     usage = TestClient(main.app).get("/api/v1/usage").json()
     assert usage["searches_left"] == 160
     assert usage["text"] == {"provider": "serper", "credits": 2484, "searches_left": 1242}
+
+
+def test_usage_includes_searchapi_credits(monkeypatch):
+    def get(url, params=None, headers=None, timeout=None):
+        if "searchapi" in url:
+            return FakeResponse(data={"account": {"remaining_credits": 96, "monthly_allowance": 0}})
+        return FakeResponse(data={"total_searches_left": 158, "searches_per_month": 250})
+
+    monkeypatch.setenv("SERPAPI_API_KEY", "k")
+    monkeypatch.setenv("SEARCHAPI_API_KEY", "k2")
+    monkeypatch.setenv("BLOB_READ_WRITE_TOKEN", "t")
+    monkeypatch.setattr(main.requests, "get", get)
+    main._usage_cache.update(at=0.0, data=None)
+    usage = TestClient(main.app).get("/api/v1/usage").json()
+    assert usage["fast_photo"] == {"provider": "searchapi", "searches_left": 96}
+
+
+def _fast_lens_env(monkeypatch):
+    monkeypatch.setenv("SERPAPI_API_KEY", "serpapi-key")
+    monkeypatch.setenv("SEARCHAPI_API_KEY", "searchapi-key")
+    monkeypatch.setenv("BLOB_READ_WRITE_TOKEN", "blob-token")
+
+
+def test_fast_lens_uses_searchapi_with_a_temporary_blob(monkeypatch, tmp_path):
+    image = tmp_path / "photo.jpg"
+    image.write_bytes(b"\xff\xd8 fake jpeg")
+    _fast_lens_env(monkeypatch)
+    calls = []
+
+    def put(url, data, headers, timeout):
+        calls.append(("upload", headers["x-content-type"]))
+        return FakeResponse(data={"url": "https://x.public.blob.vercel-storage.com/lens/photo-abc.jpg"})
+
+    def get(url, params, timeout):
+        calls.append(("search", params["url"], params["country"]))
+        return FakeResponse(data={"visual_matches": [{
+            "title": "Casio watch", "source": "Flipkart", "link": "https://www.flipkart.com/x/p/itm1",
+            "price": "₹2,995*", "extracted_price": 2995, "currency": "INR",
+            "image": {"link": "https://img.example/full.jpg"}, "thumbnail": "https://img.example/t.jpg",
+        }]})
+
+    deleted = []
+    monkeypatch.setattr(s.requests, "put", put)
+    monkeypatch.setattr(s.requests, "get", get)
+    monkeypatch.setattr(s, "delete_temporary_image", deleted.append)
+    monkeypatch.setattr(s.requests, "post", lambda *a, **k: pytest.fail("SerpApi should not be used"))
+
+    candidates = s.run_google_lens(image)
+
+    assert calls[0] == ("upload", "image/jpeg")
+    assert calls[1] == ("search", "https://x.public.blob.vercel-storage.com/lens/photo-abc.jpg", "in")
+    assert candidates[0]["image"] == "https://img.example/full.jpg"
+    assert s.extract_price(candidates[0])["price"] == 2995
+    import time
+    for _ in range(50):
+        if deleted:
+            break
+        time.sleep(0.01)
+    assert deleted == ["https://x.public.blob.vercel-storage.com/lens/photo-abc.jpg"]
+
+
+def test_fast_lens_falls_back_to_serpapi(monkeypatch, tmp_path):
+    image = tmp_path / "photo.jpg"
+    image.write_bytes(b"\xff\xd8 fake jpeg")
+    _fast_lens_env(monkeypatch)
+    monkeypatch.setattr(s, "upload_temporary_image", lambda path, mime: "https://blob.example/p.jpg")
+    monkeypatch.setattr(s, "delete_temporary_image", lambda url: None)
+    monkeypatch.setattr(s.requests, "post", lambda *a, **k: _Json({"image_id": "img"}))
+    match = {"title": "Casio watch", "source": "Flipkart", "link": "https://www.flipkart.com/x/p/itm1"}
+
+    def get(url, params, timeout):
+        if "searchapi" in url:
+            return FakeResponse(data={"error": "You have run out of credits."}, status_code=429)
+        return _Json({"visual_matches": [match]})
+
+    monkeypatch.setattr(s.requests, "get", get)
+    assert [c["title"] for c in s.run_google_lens(image)] == ["Casio watch"]

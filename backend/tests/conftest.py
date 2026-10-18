@@ -29,8 +29,10 @@ def reset_server_state():
 
 @pytest.fixture(autouse=True)
 def no_serper(monkeypatch):
-    """Tests never call Serper.dev; tests that need it set a fake key."""
-    monkeypatch.delenv("SERPER_API_KEY", raising=False)
+    """Tests never call Serper, SearchApi or Vercel Blob; tests that need
+    them set fake keys."""
+    for name in ("SERPER_API_KEY", "SEARCHAPI_API_KEY", "BLOB_READ_WRITE_TOKEN"):
+        monkeypatch.delenv(name, raising=False)
 
 
 @pytest.fixture

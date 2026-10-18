@@ -66,7 +66,7 @@ const FAQS = [
   {
     question: "What happens to my photo?",
     answer:
-      "It's sent to Google Lens only to run your search, and the SnapBuy server doesn't keep a copy. Your recent searches (with a small copy of each photo) and saved items stay in this browser only, and you can clear them at any time.",
+      "It's sent to Google Lens only to run your search. To do that, it may sit for a few seconds at a private, unguessable temporary link, which is deleted as soon as the search starts; the SnapBuy server doesn't keep a copy. Your recent searches (with a small copy of each photo) and saved items stay in this browser only, and you can clear them at any time.",
   },
   {
     question: "What kind of photo works best?",

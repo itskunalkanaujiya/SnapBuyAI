@@ -37,8 +37,12 @@ always the real product photo. Users can also use a photo, adjust size and
 position, and save a picture.
 
 **Search providers.** Each search uses the provider that did best in our
-side-by-side tests: photo search uses Google Lens through **SerpApi** (prices
-and Indian stores), text search uses Google Shopping through **Serper.dev**
+side-by-side tests: photo search uses Google Lens through **SearchApi.io**
+first (5–9 s where SerpApi took 9–41 s, same matches) while its credits last.
+SearchApi only reads images from a public link, so the photo is put on a
+public **Vercel Blob** store under an unguessable name and deleted as soon as
+the search returns. Otherwise photo search uses **SerpApi** (prices and
+Indian stores), text search uses Google Shopping through **Serper.dev**
 (faster and more relevant), falling back to SerpApi if Serper isn't set up,
 fails or runs out. After Lens identifies a photo's product, a background
 Serper Shopping lookup fills prices Lens left out, from the same store's
@@ -150,7 +154,7 @@ host.
 | `POST` | `/api/v1/products/recognize-image` | Identify the product only; returns the derived query and top Lens titles |
 | `POST` | `/api/v1/tryon` | Multipart: `person` (photo), `garment_url` (product image), `category` (`upper_body`, `lower_body` or `dresses`, from the product's `tryon_category`), optional `garment_name`; returns a JPEG |
 | `GET` | `/api/v1/tryon/overlay` | Query `url` (product image) and `category` (`glasses` or `watch`, from the product's `ar_category`); returns the photo as a PNG with its background removed, for the live try-on |
-| `GET` | `/api/v1/usage` | Searches left: SerpApi plan (photo search) and, when `SERPER_API_KEY` is set, Serper credits (`text`) |
+| `GET` | `/api/v1/usage` | Searches left: SerpApi plan, Serper credits (`text`, when `SERPER_API_KEY` is set) and SearchApi credits (`fast_photo`, when `SEARCHAPI_API_KEY` and `BLOB_READ_WRITE_TOKEN` are set) |
 | `GET` | `/health` | Health check |
 
 ## Notes

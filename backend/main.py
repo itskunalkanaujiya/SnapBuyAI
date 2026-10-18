@@ -256,7 +256,26 @@ def fetch_search_usage():
         "renews_on": account.get("plan_renewal_date"),
         "plan": account.get("plan_name"),
         "text": fetch_serper_usage(),
+        "fast_photo": fetch_searchapi_usage(),
     }
+
+
+def fetch_searchapi_usage():
+    """SearchApi.io credits (fast photo search), or None when not set up."""
+    api_key = os.getenv("SEARCHAPI_API_KEY")
+    if not api_key or not os.getenv("BLOB_READ_WRITE_TOKEN"):
+        return None
+    try:
+        response = requests.get(
+            "https://www.searchapi.io/api/v1/me", params={"api_key": api_key}, timeout=10
+        )
+        response.raise_for_status()
+        account = response.json().get("account") or response.json()
+        left = int(account.get("remaining_credits") or 0)
+    except Exception as exc:
+        print(f"Could not read SearchApi usage: {exc}")
+        return None
+    return {"provider": "searchapi", "searches_left": left}
 
 
 SERPER_CREDITS_PER_SEARCH = 2  # 40 results per Google Shopping request

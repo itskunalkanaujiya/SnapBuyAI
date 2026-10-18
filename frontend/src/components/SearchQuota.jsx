@@ -45,8 +45,9 @@ function QuotaRow({ label, left, total, note, title }) {
 }
 
 /**
- * Searches left: photo search uses SerpApi (monthly plan); text search uses
- * Serper.dev credits when set up. Read again whenever `refreshKey` changes
+ * Searches left: photo search uses SearchApi.io credits first when set up
+ * (faster), then SerpApi (monthly plan); text search uses Serper.dev credits
+ * when set up. Read again whenever `refreshKey` changes
  * (after each search). Renders nothing if the counts can't be read.
  */
 export default function SearchQuota({ refreshKey }) {
@@ -69,11 +70,21 @@ export default function SearchQuota({ refreshKey }) {
 
   const renewal = usage.renews_on ? formatRenewal(usage.renews_on) : "";
   const text = usage.text && typeof usage.text.searches_left === "number" ? usage.text : null;
+  const fast =
+    usage.fast_photo && typeof usage.fast_photo.searches_left === "number" ? usage.fast_photo : null;
   const photoEmpty = usage.searches_left <= 0;
   const textEmpty = text ? text.searches_left <= 0 : photoEmpty;
 
   return (
     <div className="search-quota">
+      {fast && fast.searches_left > 0 && (
+        <QuotaRow
+          label="Fast photo searches"
+          left={fast.searches_left}
+          note="Used first"
+          title="SearchApi.io credits: photo searches in about 5-9 s. When they run out, photo search uses the regular searches below."
+        />
+      )}
       <QuotaRow
         label={text ? "Photo searches" : "Searches"}
         left={usage.searches_left}

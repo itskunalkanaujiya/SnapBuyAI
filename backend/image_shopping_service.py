@@ -1356,6 +1356,100 @@ def select_sections(candidates, max_results, preview=False):
     }
 
 
+# --------------------------------------------------
+# Fast Google Lens: SearchApi.io with the photo on Vercel Blob
+# --------------------------------------------------
+
+# SearchApi's Google Lens answered in 5-9 s where SerpApi took 9-41 s in our
+# tests, with the same matches. It only reads images from a public link, so
+# the photo is put on Vercel Blob under an unguessable name for the few
+# seconds the search takes, then deleted.
+SEARCHAPI_URL = "https://www.searchapi.io/api/v1/search"
+BLOB_API_URL = "https://blob.vercel-storage.com"
+BLOB_API_VERSION = "11"
+
+
+def fast_lens_available():
+    return bool(os.getenv("SEARCHAPI_API_KEY") and os.getenv("BLOB_READ_WRITE_TOKEN"))
+
+
+def _blob_headers():
+    return {
+        "authorization": f"Bearer {os.environ['BLOB_READ_WRITE_TOKEN']}",
+        "x-api-version": BLOB_API_VERSION,
+    }
+
+
+def upload_temporary_image(image_path, mime_type):
+    """Put the photo on Vercel Blob and return its public URL."""
+    extension = {"image/png": "png", "image/webp": "webp"}.get(mime_type, "jpg")
+    response = requests.put(
+        f"{BLOB_API_URL}/?pathname=lens/photo.{extension}",
+        data=Path(image_path).read_bytes(),
+        headers={
+            **_blob_headers(),
+            "x-content-type": mime_type,
+            "x-add-random-suffix": "1",
+            "x-cache-control-max-age": "60",
+        },
+        timeout=20,
+    )
+    response.raise_for_status()
+    return response.json()["url"]
+
+
+def delete_temporary_image(url):
+    try:
+        requests.post(f"{BLOB_API_URL}/delete", json={"urls": [url]}, headers=_blob_headers(), timeout=20)
+    except Exception as exc:
+        print(f"Could not delete temporary image: {exc}")
+
+
+def from_searchapi(item):
+    """A SearchApi visual match in SerpApi's shape."""
+    converted = dict(item)
+    image = item.get("image")
+    converted["image"] = image.get("link") if isinstance(image, dict) else image
+    if item.get("price") and item.get("extracted_price") is not None:
+        converted["price"] = {
+            "value": item["price"],
+            "extracted_value": item["extracted_price"],
+            "currency": item.get("currency"),
+        }
+    return converted
+
+
+def run_searchapi_lens(image_path, mime_type, query=None):
+    """Google Lens through SearchApi.io; raw visual matches in SerpApi's shape."""
+    started = time.monotonic()
+    url = upload_temporary_image(image_path, mime_type)
+    uploaded = time.monotonic()
+    try:
+        params = {
+            "engine": "google_lens",
+            "url": url,
+            "country": "in",
+            "hl": "en",
+            "api_key": os.environ["SEARCHAPI_API_KEY"],
+        }
+        if query:
+            params["q"] = query
+        response = requests.get(SEARCHAPI_URL, params=params, timeout=45)
+        data = response.json()
+        if response.status_code != 200 or data.get("error"):
+            raise RuntimeError(f"{response.status_code}: {str(data.get('error') or data)[:200]}")
+    finally:
+        # SearchApi has read the photo by now; remove it in the background.
+        threading.Thread(target=delete_temporary_image, args=(url,), daemon=True).start()
+
+    matches = [from_searchapi(item) for item in data.get("visual_matches") or [] if isinstance(item, dict)]
+    print(
+        f"Lens timings (SearchApi): upload {uploaded - started:.1f}s, "
+        f"search {time.monotonic() - uploaded:.1f}s, {len(matches)} matches"
+    )
+    return matches
+
+
 def run_google_lens(image_path: str | Path, query: str | None = None) -> list[dict]:
     """
     Upload an image to SerpApi and return Google Lens shopping candidates,
@@ -1381,6 +1475,20 @@ def run_google_lens(image_path: str | Path, query: str | None = None) -> list[di
     if mime_type not in {"image/jpeg", "image/png", "image/webp"}:
         raise ValueError("Use a JPEG, PNG, or WebP image.")
 
+    visual_matches = None
+    if fast_lens_available():
+        try:
+            visual_matches = run_searchapi_lens(image_path, mime_type, query)
+        except Exception as exc:
+            print(f"Fast Lens (SearchApi) failed, using SerpApi: {exc}")
+    if not visual_matches:
+        visual_matches = run_serpapi_lens(image_path, mime_type, api_key, query)
+
+    return shopping_candidates(visual_matches)
+
+
+def run_serpapi_lens(image_path, mime_type, api_key, query=None):
+    """Upload the image to SerpApi and return Google Lens's raw visual matches."""
     # Upload image to SerpApi.
     upload_started = time.monotonic()
     with image_path.open("rb") as image_file:
@@ -1417,6 +1525,11 @@ def run_google_lens(image_path: str | Path, query: str | None = None) -> list[di
             api_key, image_id, no_cache=True, query=query
         )
 
+    return visual_matches
+
+
+def shopping_candidates(visual_matches):
+    """Shopping listings from raw visual matches, filtered and deduplicated."""
     # Filter and deduplicate before scoring. The same listing can appear
     # under several URLs, so also match on title and seller.
     candidates = []
