@@ -249,11 +249,37 @@ def fetch_search_usage():
     response.raise_for_status()
     account = response.json()
     return {
+        # SerpApi: photo search (and text search when Serper isn't set up).
         "searches_left": account.get("total_searches_left"),
         "searches_per_month": account.get("searches_per_month"),
         "used_this_month": account.get("this_month_usage"),
         "renews_on": account.get("plan_renewal_date"),
         "plan": account.get("plan_name"),
+        "text": fetch_serper_usage(),
+    }
+
+
+SERPER_CREDITS_PER_SEARCH = 2  # 40 results per Google Shopping request
+
+
+def fetch_serper_usage():
+    """Serper.dev credits (text search, photo-search prices), or None."""
+    api_key = os.getenv("SERPER_API_KEY")
+    if not api_key:
+        return None
+    try:
+        response = requests.get(
+            "https://google.serper.dev/account", headers={"X-API-KEY": api_key}, timeout=10
+        )
+        response.raise_for_status()
+        credits = int(response.json().get("balance") or 0)
+    except Exception as exc:
+        print(f"Could not read Serper usage: {exc}")
+        return None
+    return {
+        "provider": "serper",
+        "credits": credits,
+        "searches_left": credits // SERPER_CREDITS_PER_SEARCH,
     }
 
 

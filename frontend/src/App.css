@@ -2648,7 +2648,12 @@ label.field input::placeholder {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
-  gap: 7px;
+  gap: 10px;
+}
+
+.search-quota-row {
+  display: grid;
+  gap: 6px;
 }
 
 .search-quota-head {
@@ -2659,6 +2664,12 @@ label.field input::placeholder {
   color: var(--text-2);
   font-size: 13px;
   gap: 4px 12px;
+}
+
+.search-quota-label {
+  margin-right: 8px;
+  color: var(--text-2);
+  font-weight: 600;
 }
 
 .search-quota-head strong {
@@ -2691,14 +2702,16 @@ label.field input::placeholder {
   background: #e8a317;
 }
 
-.quota-empty .search-quota-track span,
-.quota-empty .search-quota-head strong {
-  color: var(--danger);
+.quota-low .search-quota-head strong {
+  color: #c98a0c;
+}
+
+.quota-empty .search-quota-track span {
   background: var(--danger);
 }
 
 .quota-empty .search-quota-head strong {
-  background: none;
+  color: var(--danger);
 }
 
 .search-quota-note {

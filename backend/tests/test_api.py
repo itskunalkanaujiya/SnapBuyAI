@@ -234,7 +234,7 @@ def test_cors_allows_configured_origins(monkeypatch):
 def test_usage_reports_searches_left_and_is_cached(monkeypatch):
     calls = []
 
-    def account(url, params, timeout):
+    def account(url, params=None, headers=None, timeout=None):
         calls.append(url)
         return FakeResponse(data={
             "total_searches_left": 167, "searches_per_month": 250,
@@ -252,7 +252,7 @@ def test_usage_reports_searches_left_and_is_cached(monkeypatch):
 
     assert first == {
         "searches_left": 167, "searches_per_month": 250, "used_this_month": 83,
-        "renews_on": "2026-11-09", "plan": "Free Plan",
+        "renews_on": "2026-11-09", "plan": "Free Plan", "text": None,
     }
     assert len(calls) == 1  # cached; the API key is never returned
 
@@ -264,3 +264,19 @@ def test_usage_unavailable_gives_503(monkeypatch):
     monkeypatch.setattr(main.requests, "get", broken)
     main._usage_cache.update(at=0.0, data=None)
     assert TestClient(main.app).get("/api/v1/usage").status_code == 503
+
+
+def test_usage_includes_serper_credits(monkeypatch):
+    def get(url, params=None, headers=None, timeout=None):
+        if "serper" in url:
+            return FakeResponse(data={"balance": 2484, "rateLimit": 5})
+        return FakeResponse(data={"total_searches_left": 160, "searches_per_month": 250})
+
+    monkeypatch.setenv("SERPAPI_API_KEY", "test-key")
+    monkeypatch.setenv("SERPER_API_KEY", "serper-key")
+    monkeypatch.setattr(main.requests, "get", get)
+    main._usage_cache.update(at=0.0, data=None)
+
+    usage = TestClient(main.app).get("/api/v1/usage").json()
+    assert usage["searches_left"] == 160
+    assert usage["text"] == {"provider": "serper", "credits": 2484, "searches_left": 1242}

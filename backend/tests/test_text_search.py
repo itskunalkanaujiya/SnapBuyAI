@@ -233,3 +233,58 @@ def test_text_and_photo_searches_share_the_limit(client, fake_text_search, monke
     monkeypatch.setattr(main, "SEARCH_LIMIT", 1)
     assert client.post(TEXT, json={"query": "first"}).status_code == 200
     assert client.post(TEXT_STREAM, json={"query": "second"}).status_code == 429
+
+
+SERPER_ITEMS = [
+    {"title": "boAt Airdopes 141 Wireless Earbuds", "source": "Amazon.in",
+     "link": "https://www.google.com/search?ibp=oshop&prds=catalogid:1", "price": "₹1,099",
+     "imageUrl": "https://encrypted-tbn0.gstatic.com/shopping?q=a", "rating": 4.5,
+     "ratingCount": 928, "productId": "1", "position": 1},
+    {"title": "boAt Airdopes 141 ANC", "source": "Flipkart",
+     "link": "https://www.google.com/search?ibp=oshop&prds=catalogid:2", "price": "₹1,299",
+     "imageUrl": "https://encrypted-tbn0.gstatic.com/shopping?q=b", "productId": "2", "position": 2},
+]
+
+
+def test_serper_is_used_first_for_text_search(monkeypatch):
+    from conftest import FakeResponse
+
+    posts = []
+
+    def post(url, headers, json, timeout):
+        posts.append((url, json))
+        return FakeResponse(data={"shopping": SERPER_ITEMS})
+
+    def serpapi(query):
+        raise AssertionError("SerpApi should not be called")
+
+    monkeypatch.setenv("SERPER_API_KEY", "test-key")
+    monkeypatch.setattr(t.requests, "post", post)
+    monkeypatch.setattr(t, "run_google_shopping", serpapi)
+
+    result = t.search_products_by_text("boat airdopes 141")
+
+    assert result["search_provider"] == "serper"
+    assert posts[0][1]["gl"] == "in"
+    first = result["best_matches"][0]
+    assert first["price"] == 1099 and first["marketplace"] == "Amazon.in"
+    assert first["rating"] == 4.5 and first["reviews"] == 928
+    assert first["image_url"].startswith("https://encrypted-tbn0")
+
+
+def test_falls_back_to_serpapi_when_serper_fails(monkeypatch):
+    from conftest import FakeResponse
+
+    monkeypatch.setenv("SERPER_API_KEY", "test-key")
+    monkeypatch.setattr(t.requests, "post", lambda *a, **k: FakeResponse(text="Not enough credits", status_code=400))
+    monkeypatch.setattr(t, "run_google_shopping", lambda query: [t.from_serper(item) for item in SERPER_ITEMS])
+
+    result = t.search_products_by_text("boat airdopes 141")
+
+    assert result["search_provider"] == "serpapi"
+    assert result["best_matches"]
+
+
+def test_serpapi_only_without_a_serper_key(monkeypatch):
+    monkeypatch.setattr(t, "run_google_shopping", lambda query: [t.from_serper(item) for item in SERPER_ITEMS])
+    assert t.search_products_by_text("boat airdopes 141")["search_provider"] == "serpapi"

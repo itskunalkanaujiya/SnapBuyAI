@@ -36,7 +36,15 @@ and alike, as clear-lens holes or tinted areas), so the frame on the face is
 always the real product photo. Users can also use a photo, adjust size and
 position, and save a picture.
 
-**Text search** sends the typed query to Google Shopping (through SerpApi):
+**Search providers.** Each search uses the provider that did best in our
+side-by-side tests: photo search uses Google Lens through **SerpApi** (prices
+and Indian stores), text search uses Google Shopping through **Serper.dev**
+(faster and more relevant), falling back to SerpApi if Serper isn't set up,
+fails or runs out. After Lens identifies a photo's product, a background
+Serper Shopping lookup fills prices Lens left out, from the same store's
+matching listing. The home screen shows the searches left on each.
+
+**Text search** sends the typed query to Google Shopping:
 top results keep Google's relevance order, and Lowest Prices are the
 cheapest listings that still contain most of the query's words. Listings
 show ratings and original prices where stores provide them, and link to
@@ -142,6 +150,7 @@ host.
 | `POST` | `/api/v1/products/recognize-image` | Identify the product only; returns the derived query and top Lens titles |
 | `POST` | `/api/v1/tryon` | Multipart: `person` (photo), `garment_url` (product image), `category` (`upper_body`, `lower_body` or `dresses`, from the product's `tryon_category`), optional `garment_name`; returns a JPEG |
 | `GET` | `/api/v1/tryon/overlay` | Query `url` (product image) and `category` (`glasses` or `watch`, from the product's `ar_category`); returns the photo as a PNG with its background removed, for the live try-on |
+| `GET` | `/api/v1/usage` | Searches left: SerpApi plan (photo search) and, when `SERPER_API_KEY` is set, Serper credits (`text`) |
 | `GET` | `/health` | Health check |
 
 ## Notes

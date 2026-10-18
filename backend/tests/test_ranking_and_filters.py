@@ -104,3 +104,36 @@ def test_select_sections_marks_pending_in_preview():
 
     final = s.select_sections(candidates, max_results=10)
     assert all(p["pending"] is False for p in final["best_matches"])
+
+
+def test_missing_prices_are_filled_from_the_same_store_on_google_shopping():
+    from concurrent.futures import Future
+    import time
+
+    candidates = [
+        {"title": "Buy Soch Women Floral Printed Kurta - Kurtas for Women", "source": "Myntra",
+         "link": "https://www.myntra.com/kurtas/soch/123"},
+        {"title": "Soch Women Floral Kurta", "source": "Ajio", "link": "https://www.ajio.com/p/9"},
+        {"title": "Unrelated Blue Jeans", "source": "Myntra", "link": "https://www.myntra.com/jeans/1"},
+        {"title": "Soch Floral Kurta", "source": "Flipkart", "link": "https://www.flipkart.com/p/1",
+         "price": {"value": "₹999", "extracted_value": 999, "currency": "₹"}},
+    ]
+    job = Future()
+    job.set_result([
+        {"title": "Soch Women Floral Printed Kurta", "source": "Myntra", "price": "₹1,403"},
+        {"title": "Soch Women Floral Printed Kurta", "source": "Amazon.in", "price": "₹1,200"},
+        {"title": "Soch Floral Kurta", "source": "Flipkart", "price": "₹1,500"},
+    ])
+
+    filled = s.apply_shopping_prices(candidates, job, time.monotonic() + 1)
+
+    assert filled == 1
+    assert candidates[0]["_shopping_price"]["price"] == 1403  # same store, same product
+    assert "_shopping_price" not in candidates[1]  # Ajio isn't in the Shopping results
+    assert "_shopping_price" not in candidates[2]  # same store, different product
+    assert "_shopping_price" not in candidates[3]  # already had a Lens price
+    assert s.resolve_offer(candidates[0])["price"] == 1403
+
+
+def test_no_shopping_lookup_without_serper():
+    assert s.start_shopping_prices("soch kurta") is None

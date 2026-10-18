@@ -1065,6 +1065,15 @@ def resolve_offer(item):
             "currency": page["currency"],
         }
 
+    # Same store's price on Google Shopping, when the seller page gave none.
+    if price_info["price"] is None and item.get("_shopping_price"):
+        shopping = item["_shopping_price"]
+        price_info = {
+            "price": shopping["price"],
+            "price_text": shopping["price_text"] or format_price_text(shopping["price"], "INR"),
+            "currency": shopping["currency"],
+        }
+
     if availability is None:
         availability = page.get("availability")
 
@@ -1162,6 +1171,81 @@ def finish_page_details(job):
 
     # Do not wait for the slow pages; their results are no longer needed.
     pool.shutdown(wait=False, cancel_futures=True)
+
+
+# --------------------------------------------------
+# Prices from Google Shopping (Serper.dev)
+# --------------------------------------------------
+
+# A Lens listing borrows a Google Shopping price only from the same store,
+# when most of the shorter title's words appear in the other title.
+SHOPPING_TITLE_OVERLAP = 0.6
+STORE_SUFFIX_PATTERN = re.compile(r"(\.(com|in|co\.in|net|store))+$|^www\.")
+
+
+def start_shopping_prices(query):
+    """
+    Look up the identified product on Google Shopping in the background, to
+    fill prices Google Lens leaves out. Uses Serper.dev's own credits, so it
+    costs no SerpApi search; returns None when Serper isn't set up.
+    """
+    if not query or not os.getenv("SERPER_API_KEY"):
+        return None
+    from text_shopping_service import run_serper_shopping  # avoids a circular import
+
+    pool = ThreadPoolExecutor(max_workers=1)
+    future = pool.submit(run_serper_shopping, query)
+    pool.shutdown(wait=False)
+    return future
+
+
+def store_key(name):
+    """Comparable store name: "Amazon.in", "amazon.in" and "Amazon" match."""
+    text = re.sub(r"\s+", "", (name or "").lower())
+    return STORE_SUFFIX_PATTERN.sub("", text)
+
+
+def title_words(title):
+    return {word for word in re.findall(r"[a-z0-9]+", (title or "").lower()) if len(word) > 2}
+
+
+def apply_shopping_prices(candidates, job, deadline):
+    """Fill missing prices from the background Google Shopping lookup."""
+    if job is None:
+        return 0
+    try:
+        shopping = job.result(timeout=max(0.5, deadline - time.monotonic()))
+    except Exception as exc:
+        print(f"Google Shopping price lookup failed: {exc}")
+        return 0
+
+    offers = []
+    for entry in shopping:
+        price = extract_price(entry)
+        if price["price"] is not None and entry.get("source"):
+            offers.append((store_key(entry["source"]), title_words(entry.get("title")), price))
+
+    filled = 0
+    for item in candidates:
+        page = item.get("_page_details") or {}
+        if extract_price(item)["price"] is not None or page.get("price") is not None:
+            continue
+        store = store_key(item.get("source"))
+        words = title_words(item.get("title"))
+        if not store or not words:
+            continue
+
+        best = None
+        for offer_store, offer_words, price in offers:
+            if offer_store != store or not offer_words:
+                continue
+            overlap = len(words & offer_words) / min(len(words), len(offer_words))
+            if overlap >= SHOPPING_TITLE_OVERLAP and (best is None or overlap > best[0]):
+                best = (overlap, price)
+        if best:
+            item["_shopping_price"] = {**best[1], "currency": best[1]["currency"] or "INR"}
+            filled += 1
+    return filled
 
 
 # --------------------------------------------------
@@ -1440,6 +1524,7 @@ def search_products_by_image(
     lens_done = time.monotonic()
 
     emit("identified", {"online_search_query": query})
+    shopping_job = start_shopping_prices(query) if candidates else None
 
     if not candidates:
         return {
@@ -1506,8 +1591,12 @@ def search_products_by_image(
             },
         )
 
-    # Read price and stock from seller pages where Lens lacks them.
+    # Read price and stock from seller pages where Lens lacks them, then
+    # fill what's still missing from Google Shopping.
     finish_page_details(page_job)
+    filled = apply_shopping_prices(candidates, shopping_job, lens_done + PAGE_FETCH_DEADLINE)
+    if filled:
+        print(f"Filled {filled} price(s) from Google Shopping.")
     pages_done = time.monotonic()
 
     print(

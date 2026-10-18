@@ -27,6 +27,12 @@ def reset_server_state():
     main._overlay_cache.clear()
 
 
+@pytest.fixture(autouse=True)
+def no_serper(monkeypatch):
+    """Tests never call Serper.dev; tests that need it set a fake key."""
+    monkeypatch.delenv("SERPER_API_KEY", raising=False)
+
+
 @pytest.fixture
 def png_bytes():
     """Return PNG bytes for a solid-colour image."""
@@ -42,9 +48,10 @@ def png_bytes():
 class FakeResponse:
     """Minimal stand-in for requests.Response."""
 
-    def __init__(self, text="", data=None):
+    def __init__(self, text="", data=None, status_code=200):
         self.text = text
         self._data = data
+        self.status_code = status_code
 
     def raise_for_status(self):
         pass

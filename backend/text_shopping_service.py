@@ -247,6 +247,63 @@ def run_google_shopping(query: str) -> list[dict]:
     return results if isinstance(results, list) else []
 
 
+SERPER_SHOPPING_URL = "https://google.serper.dev/shopping"
+SERPER_RESULTS = 40  # Serper charges 2 credits for 11-100 results
+
+
+def run_serper_shopping(query: str) -> list[dict]:
+    """
+    Search Google Shopping in India through Serper.dev. Items are converted
+    to SerpApi's field names so the rest of the pipeline is shared.
+    """
+    api_key = os.getenv("SERPER_API_KEY")
+    if not api_key:
+        raise RuntimeError("SERPER_API_KEY is missing from backend/.env")
+
+    response = requests.post(
+        SERPER_SHOPPING_URL,
+        headers={"X-API-KEY": api_key, "Content-Type": "application/json"},
+        json={"q": query, "gl": "in", "hl": "en", "num": SERPER_RESULTS},
+        timeout=30,
+    )
+    if response.status_code != 200:
+        raise RuntimeError(f"Serper returned {response.status_code}: {response.text[:200]}")
+
+    items = response.json().get("shopping") or []
+    return [from_serper(item) for item in items if isinstance(item, dict)]
+
+
+def from_serper(item):
+    """A Serper shopping item in SerpApi's shape."""
+    return {
+        "title": item.get("title"),
+        "source": item.get("source"),
+        "product_link": item.get("link"),
+        "price": item.get("price"),
+        "thumbnail": item.get("imageUrl"),
+        "rating": item.get("rating"),
+        "reviews": item.get("ratingCount"),
+        "product_id": item.get("productId"),
+    }
+
+
+def fetch_shopping_results(query: str) -> tuple[list[dict], str]:
+    """
+    Google Shopping results and the provider used. Serper first: in our
+    tests it was faster and more relevant for India, and its credits are
+    separate from SerpApi's, which are kept for photo search. SerpApi is the
+    fallback when Serper isn't set up, fails, runs out or finds nothing.
+    """
+    if os.getenv("SERPER_API_KEY"):
+        try:
+            results = run_serper_shopping(query)
+            if results:
+                return results, "serper"
+        except Exception as exc:
+            print(f"Serper shopping failed, using SerpApi: {exc}")
+    return run_google_shopping(query), "serpapi"
+
+
 def build_shopping_product(item, query):
     """Convert a Google Shopping result into the frontend product format."""
     price_info = extract_price(item)
@@ -310,7 +367,7 @@ def search_products_by_text(query: str, max_results: int = 10) -> dict:
     if not query:
         raise ValueError("Search query cannot be empty.")
 
-    results = run_google_shopping(query)
+    results, provider = fetch_shopping_results(query)
 
     products = []
     seen_titles = set()
@@ -377,4 +434,5 @@ def search_products_by_text(query: str, max_results: int = 10) -> dict:
         "cheapest_alternatives": cheapest_alternatives,
         "online_count": len(best_matches) + len(cheapest_alternatives),
         "online_search_query": query,
+        "search_provider": provider,
     }
