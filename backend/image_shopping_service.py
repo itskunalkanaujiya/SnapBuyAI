@@ -77,14 +77,14 @@ PAGE_FETCH_WORKERS = 16
 
 # Seller pages still loading this many seconds after the Google Lens results
 # arrive are skipped, however late they started.
-PAGE_FETCH_DEADLINE = 8
+PAGE_FETCH_DEADLINE = 6.5
 
 THUMBNAIL_TIMEOUT = 5
 THUMBNAIL_WORKERS = 16
 
 # Thumbnails still downloading after this many seconds are not scored.
 # Normally all arrive in about 2s; this only guards against a hung host.
-THUMBNAIL_DEADLINE = 4
+THUMBNAIL_DEADLINE = 2.5
 
 SUPPORTED_CURRENCIES = {"INR", "USD", "EUR", "GBP", "AED", "CAD", "AUD", "JPY"}
 
@@ -605,6 +605,14 @@ def load_clip_model():
             return None, None
 
 
+# One connection pool for thumbnails: most come from the same few image
+# hosts, and reusing connections skips a TLS handshake per thumbnail.
+_thumbnail_session = requests.Session()
+_thumbnail_session.mount(
+    "https://", requests.adapters.HTTPAdapter(pool_connections=8, pool_maxsize=THUMBNAIL_WORKERS)
+)
+
+
 def download_thumbnail(url):
     if not isinstance(url, str) or not url.strip():
         return None
@@ -614,7 +622,7 @@ def download_thumbnail(url):
         if parsed.scheme not in {"http", "https"}:
             return None
 
-        with requests.get(
+        with _thumbnail_session.get(
             url, headers=REQUEST_HEADERS, timeout=THUMBNAIL_TIMEOUT, stream=True
         ) as response:
             response.raise_for_status()
@@ -1131,6 +1139,14 @@ def is_available_in_india(item):
     return is_indian_store(item.get("link"))
 
 
+def probably_available_in_india(item):
+    """is_available_in_india() using only Google Lens data (before seller pages)."""
+    price = extract_price(item)
+    if price["price"] is not None and price["currency"] is not None:
+        return normalize_currency(price["currency"], price["price_text"]) == "INR"
+    return is_indian_store(item.get("link"))
+
+
 def needs_page_details(item):
     return bool(item.get("link")) and (
         extract_price(item)["price"] is None or serpapi_availability(item) is None
@@ -1366,6 +1382,7 @@ def run_google_lens(image_path: str | Path, query: str | None = None) -> list[di
         raise ValueError("Use a JPEG, PNG, or WebP image.")
 
     # Upload image to SerpApi.
+    upload_started = time.monotonic()
     with image_path.open("rb") as image_file:
         upload_response = requests.post(
             SERPAPI_IMAGE_URL,
@@ -1385,7 +1402,12 @@ def run_google_lens(image_path: str | Path, query: str | None = None) -> list[di
         raise RuntimeError("Image upload returned no image_id.")
 
     # Search Google Lens.
+    search_started = time.monotonic()
     visual_matches = fetch_visual_matches(api_key, image_id, query=query)
+    print(
+        f"Lens timings: upload {search_started - upload_started:.1f}s "
+        f"({image_path.stat().st_size // 1024} KB), search {time.monotonic() - search_started:.1f}s"
+    )
 
     # Google Lens occasionally returns an empty response; retry once
     # without SerpApi's cache before giving up.
@@ -1542,17 +1564,31 @@ def search_products_by_image(
     # Google Lens already ranks candidates using the uploaded image.
     # Keep its initial ordering instead of filtering by title relevance first.
     # CLIP will perform the visual re-ranking on this larger candidate pool.
-    candidate_limit = min(
-        len(candidates),
-        max(max_results * 3, 20),
-        30,
-    )
+    candidate_limit = max(max_results * 2, 20, 24)
 
-    candidates = candidates[:candidate_limit]
+    # Drop listings that will be filtered out anyway (foreign currency, or
+    # no price and not an Indian store) before choosing the pool, so the
+    # pool is all usable listings.
+    usable = [item for item in candidates if probably_available_in_india(item)]
+    candidates = (usable or candidates)[:candidate_limit]
+
+    # Show Lens's own order and prices straight away; CLIP re-ranks after.
+    if on_event is not None:
+        early = select_sections(candidates, max_results, preview=True)
+        emit(
+            "preview",
+            {
+                "best_matches": early["best_matches"],
+                "cheapest_alternatives": early["cheapest_alternatives"],
+                "online_search_query": query,
+                "ranked": False,
+            },
+        )
 
     # Download thumbnails first: seller-page fetching competes for the CPU
     # and would slow these downloads enough to miss some.
     thumbnails = download_thumbnails(candidates)
+    thumbnails_done = time.monotonic()
 
     # Seller pages then load in the background while CLIP runs.
     page_job = start_page_details(candidates, deadline=lens_done + PAGE_FETCH_DEADLINE)
@@ -1588,6 +1624,7 @@ def search_products_by_image(
                 "best_matches": preview["best_matches"],
                 "cheapest_alternatives": preview["cheapest_alternatives"],
                 "online_search_query": query,
+                "ranked": True,
             },
         )
 
@@ -1601,7 +1638,8 @@ def search_products_by_image(
 
     print(
         f"Search timings: lens {lens_done - started:.1f}s, "
-        f"clip {clip_done - lens_done:.1f}s, "
+        f"thumbnails {thumbnails_done - lens_done:.1f}s, "
+        f"clip {clip_done - thumbnails_done:.1f}s, "
         f"pages +{pages_done - clip_done:.1f}s, "
         f"total {pages_done - started:.1f}s "
         f"({len(candidates)} candidates)"

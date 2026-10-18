@@ -137,3 +137,45 @@ def test_missing_prices_are_filled_from_the_same_store_on_google_shopping():
 
 def test_no_shopping_lookup_without_serper():
     assert s.start_shopping_prices("soch kurta") is None
+
+
+def test_photo_search_shows_lens_order_first_then_ranked(monkeypatch, tmp_path):
+    candidates = [
+        {"title": f"Watch {name}", "source": "Flipkart", "link": f"https://www.flipkart.com/w/p/{name}",
+         "thumbnail": f"https://img.example/{name}.jpg",
+         "price": {"value": f"₹{price}", "extracted_value": price, "currency": "₹"}, "in_stock": True}
+        for name, price in (("a", 900), ("b", 800), ("c", 700))
+    ]
+    monkeypatch.setattr(s, "run_google_lens", lambda path, query=None: [dict(c) for c in candidates])
+    monkeypatch.setattr(s, "download_thumbnails", lambda items: [None] * len(items))
+    monkeypatch.setattr(s, "compute_visual_similarity_scores", lambda path, items, thumbs: {0: 0.5, 1: 0.9, 2: 0.7})
+    monkeypatch.setattr(s, "start_page_details", lambda items, deadline=None: None)
+    monkeypatch.setattr(s, "finish_page_details", lambda job: None)
+
+    events = []
+    s.search_products_by_image(tmp_path / "photo.jpg", on_event=lambda kind, data: events.append((kind, data)))
+
+    previews = [data for kind, data in events if kind == "preview"]
+    assert [p["ranked"] for p in previews] == [False, True]
+    assert [p["name"] for p in previews[0]["best_matches"]] == ["Watch a", "Watch b", "Watch c"]
+    assert [p["name"] for p in previews[1]["best_matches"]] == ["Watch b", "Watch c", "Watch a"]
+
+
+def test_foreign_listings_dont_crowd_out_indian_ones(monkeypatch, tmp_path):
+    foreign = [
+        {"title": f"Shirt {i}", "source": "Shop", "link": f"https://shop.example.com/p/{i}",
+         "price": {"value": f"${20 + i}", "extracted_value": 20 + i, "currency": "$"}}
+        for i in range(30)
+    ]
+    indian = [
+        {"title": "Cotton Shirt", "source": "Myntra", "link": "https://www.myntra.com/shirts/x/1/buy",
+         "price": {"value": "₹799", "extracted_value": 799, "currency": "₹"}, "in_stock": True},
+    ]
+    monkeypatch.setattr(s, "run_google_lens", lambda path, query=None: foreign + indian)
+    monkeypatch.setattr(s, "download_thumbnails", lambda items: [None] * len(items))
+    monkeypatch.setattr(s, "compute_visual_similarity_scores", lambda path, items, thumbs: {})
+    monkeypatch.setattr(s, "start_page_details", lambda items, deadline=None: None)
+    monkeypatch.setattr(s, "finish_page_details", lambda job: None)
+
+    result = s.search_products_by_image(tmp_path / "photo.jpg")
+    assert [p["name"] for p in result["best_matches"]] == ["Cotton Shirt"]

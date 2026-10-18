@@ -338,8 +338,9 @@ export default function App() {
             advanceStage(STAGE.ranking);
             break;
           case "preview":
-            // Show ranked listings now; prices and stock fill in later.
-            advanceStage(STAGE.checking);
+            // Lens's own order arrives first, then the visually ranked
+            // listings; prices and stock fill in with the final results.
+            advanceStage(event.ranked === false ? STAGE.ranking : STAGE.checking);
             setResults(toResults(event, "photo"));
             break;
           case "final":
