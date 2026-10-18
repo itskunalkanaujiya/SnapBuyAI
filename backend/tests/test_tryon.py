@@ -166,3 +166,18 @@ def test_tryon_service_errors_are_reported(client, monkeypatch, png_bytes):
     response = post_tryon(client, png_bytes("teal"))
     assert response.status_code == 503
     assert "busy" in response.json()["detail"]
+
+
+def test_used_up_gpu_allowance_is_reported_clearly(monkeypatch, fake_models):
+    calls, make = fake_models
+
+    def quota(*args):
+        calls.append("leffa")
+        raise RuntimeError("You have exceeded your ZeroGPU runs limit. Subscribe to Hugging Face PRO")
+
+    monkeypatch.setattr(t, "run_leffa", quota)
+    monkeypatch.setattr(t, "run_idm_vton", make("idm"))
+
+    with pytest.raises(t.TryOnError, match="free try-on limit"):
+        t.try_on(Image.new("RGB", (300, 400)), GARMENT_URL, "upper_body")
+    assert calls == ["leffa"]  # the fallback uses the same allowance

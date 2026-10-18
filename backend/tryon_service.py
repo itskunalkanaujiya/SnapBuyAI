@@ -504,6 +504,18 @@ def run_idm_vton(person_path, garment_path, description):
     return _result_path(job.result(timeout=MODEL_TIMEOUT_SECONDS))
 
 
+QUOTA_MESSAGE = (
+    "Today's free try-on limit has been reached. It refills automatically, "
+    "so please try again in a few hours."
+)
+
+
+def is_quota_error(exc):
+    """Hugging Face's free GPU allowance (ZeroGPU quota) is used up."""
+    text = str(exc).lower()
+    return "zerogpu" in text and ("quota" in text or "limit" in text)
+
+
 def try_on(person_image, garment_url, category, garment_name=""):
     """
     Render the person wearing the garment. Returns JPEG bytes.
@@ -539,6 +551,9 @@ def try_on(person_image, garment_url, category, garment_name=""):
                 return output.getvalue()
             except Exception as exc:
                 print(f"Try-on with {model_name} failed: {type(exc).__name__}: {exc}")
+                # Every model shares the account's GPU allowance, so stop.
+                if is_quota_error(exc):
+                    raise TryOnError(QUOTA_MESSAGE)
 
     raise TryOnError(
         "The try-on service is busy right now. Please try again in a minute."
