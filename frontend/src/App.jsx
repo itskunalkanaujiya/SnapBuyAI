@@ -622,6 +622,15 @@ export default function App() {
                       </li>
                     ))}
                   </ul>
+
+                  <div className="store-strip">
+                    <span>Finds listings from stores like</span>
+                    <ul>
+                      {STORES.map((store) => (
+                        <li key={store}>{store}</li>
+                      ))}
+                    </ul>
+                  </div>
                 </div>
 
                 <div
@@ -663,14 +672,6 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="container store-strip">
-                <span>Finds listings from stores like</span>
-                <ul>
-                  {STORES.map((store) => (
-                    <li key={store}>{store}</li>
-                  ))}
-                </ul>
-              </div>
             </section>
 
             <div ref={resultsRef} className="results-anchor" />
