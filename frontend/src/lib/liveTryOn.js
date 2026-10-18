@@ -14,12 +14,16 @@ const MODEL_URLS = {
 };
 
 // Face mesh points: iris centres, with the eye corners as a fallback.
-const FACE = { irises: [468, 473], eyes: [[33, 133], [263, 362]] };
+const FACE = { irises: [468, 473], eyes: [[33, 133], [263, 362]], sides: [127, 356] };
 // Distance between lens centres relative to the distance between pupils
 // (frames are a little wider than the eyes), and how far the lens centre
 // sits below the pupil, as a share of the pupil distance.
 const LENS_SPREAD = 1.18;
 const LENS_DROP = 0.06;
+// The whole frame is about as wide as the face at the temples.
+export const FACE_FILL = 0.95;
+// How far the pupil-based size may differ from the face-based one.
+const SIZE_AGREEMENT = 0.12;
 // Product photos checked at the same time, and their results.
 const MAX_CHECKS = 4;
 const overlays = new Map();
@@ -30,6 +34,16 @@ const HAND = { wrist: 0, index: 5, middle: 9, pinky: 17 };
 
 const SMOOTHING = 0.45; // share of the new position used each frame
 const MAX_STRAP_RATIO = 2.4; // longest strap shown, relative to watch width
+
+/**
+ * Combine the two size estimates for glasses: the face-based one, nudged
+ * towards the pupil-based one by at most SIZE_AGREEMENT.
+ */
+export function frameScale(pupilScale, faceScale) {
+  if (!faceScale || !Number.isFinite(faceScale)) return pupilScale;
+  const ratio = Math.min(1 + SIZE_AGREEMENT, Math.max(1 - SIZE_AGREEMENT, pupilScale / faceScale));
+  return faceScale * ratio;
+}
 
 export function canTryOnLive(product) {
   return Boolean(product?.ar_category && (product.tryon_image_url || product.image_url));
@@ -154,6 +168,7 @@ export function placement(category, landmarks, width, height, mirror, { size, li
     if (right.x < left.x) [left, right] = [right, left];
 
     const pupils = distance(left, right);
+    const faceWidth = distance(at(FACE.sides[0]), at(FACE.sides[1]));
     const angle = Math.atan2(right.y - left.y, right.x - left.x);
     const middle = average([left, right]);
     // Down the nose, perpendicular to the eyes; `lift` moves the frame up.
@@ -163,6 +178,7 @@ export function placement(category, landmarks, width, height, mirror, { size, li
       y: middle.y + Math.cos(angle) * shift,
       // For glasses, width is the distance between the lens centres.
       width: pupils * LENS_SPREAD * size,
+      faceWidth: faceWidth * size,
       angle,
     };
   }
@@ -201,8 +217,22 @@ export function smooth(previous, next) {
     x: previous.x + (next.x - previous.x) * SMOOTHING,
     y: previous.y + (next.y - previous.y) * SMOOTHING,
     width: previous.width + (next.width - previous.width) * SMOOTHING,
+    faceWidth:
+      next.faceWidth && previous.faceWidth
+        ? previous.faceWidth + (next.faceWidth - previous.faceWidth) * SMOOTHING
+        : next.faceWidth,
     angle: blendAngle(previous.angle, next.angle),
   };
+}
+
+/**
+ * A soft shadow under the product, as if it rests on the skin; it makes
+ * glasses look worn rather than pasted on.
+ */
+export function addShadow(context, productWidth) {
+  context.shadowColor = "rgba(0, 0, 0, 0.35)";
+  context.shadowBlur = Math.max(4, productWidth * 0.035);
+  context.shadowOffsetY = Math.max(2, productWidth * 0.012);
 }
 
 /** Draw the product photo ({ image, centres }) at a placement. */
@@ -210,10 +240,14 @@ export function drawProduct(context, { image: overlay, centres }, category, plac
   if (category === "glasses" && centres) {
     // Put the midpoint between the lens centres on the placement point.
     const [leftX, leftY, rightX, rightY] = centres;
-    const scale = place.width / ((rightX - leftX) * overlay.width);
+    const scale = frameScale(
+      place.width / ((rightX - leftX) * overlay.width),
+      place.faceWidth ? (place.faceWidth * FACE_FILL) / overlay.width : null
+    );
     const anchorX = ((leftX + rightX) / 2) * overlay.width * scale;
     const anchorY = ((leftY + rightY) / 2) * overlay.height * scale;
     context.save();
+    addShadow(context, overlay.width * scale);
     context.translate(place.x, place.y);
     context.rotate(place.angle);
     context.drawImage(overlay, -anchorX, -anchorY, overlay.width * scale, overlay.height * scale);

@@ -195,6 +195,21 @@ def _border_pixels(image):
     return points, [pixels[point] for point in points]
 
 
+def _unblend(rgb, mask, background):
+    """
+    RGBA from the photo and mask, with the background colour taken out of
+    the soft edge pixels, so no white halo shows over a face or wrist.
+    """
+    colour = np.asarray(rgb).astype(np.float32)
+    alpha = np.asarray(mask).astype(np.float32) / 255
+    edge = (alpha > 0.04) & (alpha < 0.98)
+    if edge.any():
+        a = alpha[edge][:, None]
+        colour[edge] = (colour[edge] - (1 - a) * np.array(background, np.float32)) / a
+    pixels = np.dstack([np.clip(colour, 0, 255), alpha * 255]).astype(np.uint8)
+    return Image.fromarray(pixels, "RGBA")
+
+
 def _trim(rgba):
     box = rgba.getchannel("A").point(lambda value: 255 if value > 24 else 0).getbbox()
     if not box:
@@ -267,13 +282,12 @@ def cut_out_product(image, category):
         _clear_lenses(mask)
     mask = mask.point(lambda value: 0 if value == 128 else 255)
 
-    # Close pinholes, then soften the edge so it blends into the video.
+    # Close pinholes, pull the edge in by a pixel (photos on white leave a
+    # light rim around the product), then soften it to blend into video.
     mask = mask.filter(ImageFilter.MaxFilter(3)).filter(ImageFilter.MinFilter(3))
-    mask = mask.filter(ImageFilter.GaussianBlur(0.8))
+    mask = mask.filter(ImageFilter.MinFilter(3)).filter(ImageFilter.GaussianBlur(0.7))
 
-    rgba = rgb.convert("RGBA")
-    rgba.putalpha(mask)
-    product = _trim(rgba)
+    product = _trim(_unblend(rgb, mask, background))
 
     if category == "glasses" and product.width < product.height * MIN_GLASSES_RATIO:
         raise TryOnError(
@@ -431,6 +445,34 @@ def front_lens_centres(product):
     return lens_centres(product)
 
 
+TINTED_LENS_OPACITY = 0.8  # real sunglasses let a little of the eyes show
+
+
+def soften_tinted_lenses(product):
+    """Make dark lenses slightly see-through, so they look worn, not pasted."""
+    alpha = np.asarray(product.getchannel("A")).astype(np.float32)
+    lenses = _lens_regions(product)
+    if not lenses:
+        return product
+    small_height, small_width = lenses[0].shape
+    small_alpha = np.asarray(
+        product.getchannel("A").resize((small_width, small_height), Image.BILINEAR)
+    )
+    tinted = np.zeros((small_height, small_width), dtype=bool)
+    for lens in lenses:
+        if small_alpha[lens].mean() > 128:  # opaque: a tinted lens, not a hole
+            tinted |= lens
+    if not tinted.any():
+        return product
+    lens_mask = Image.fromarray(tinted.astype(np.uint8) * 255).resize(product.size, Image.BILINEAR)
+    lens_mask = lens_mask.filter(ImageFilter.MinFilter(5)).filter(ImageFilter.GaussianBlur(2))
+    weight = np.asarray(lens_mask).astype(np.float32) / 255
+    alpha *= 1 - weight * (1 - TINTED_LENS_OPACITY)
+    softened = product.copy()
+    softened.putalpha(Image.fromarray(alpha.astype(np.uint8)))
+    return softened
+
+
 def product_overlay(image_url, category):
     """
     Download a glasses or watch photo and return (PNG bytes, lens centres).
@@ -441,6 +483,8 @@ def product_overlay(image_url, category):
 
     cut_out = cut_out_product(download_garment(image_url), category)
     centres = front_lens_centres(cut_out) if category == "glasses" else None
+    if category == "glasses":
+        cut_out = soften_tinted_lenses(cut_out)
     output = io.BytesIO()
     cut_out.save(output, format="PNG", optimize=True)
     return output.getvalue(), centres

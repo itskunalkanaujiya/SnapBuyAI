@@ -1,10 +1,11 @@
 import * as THREE from "three";
+import { FACE_FILL, frameScale } from "./liveTryOn.js";
 
 // 3D live try-on. The head (or wrist) pose comes from the tracked landmarks
 // and a small 3D model is built for each product:
-//   glasses: the product photo as a curved front frame, 3D temple arms in the
-//            frame's colour running back to the ears, and an invisible head
-//            shape that hides whatever goes behind the head;
+//   glasses: the real product photo as a gently curved front frame that
+//            turns and tilts with the head (no generated parts, which looked
+//            fake), sized from both the pupils and the width of the face;
 //   watches: the product photo wrapped around the wrist, following its tilt.
 // Everything is in video pixels, with an orthographic camera, and rendered
 // on a transparent canvas that is drawn over the video frame.
@@ -12,7 +13,7 @@ import * as THREE from "three";
 const SMOOTHING = 0.5;
 const LENS_SPREAD = 1.18; // lens-centre distance / pupil distance
 const LENS_DROP = 0.06; // lens centre below the pupils, share of pupil distance
-const FRONT_BEND = 0.12; // how far the frame ends curve back, share of width
+const FRONT_BEND = 0.06; // how far the frame ends curve back, share of width
 const WRIST_BEND = 0.35; // how far the strap edges wrap back, share of width
 const MAX_STRAP_RATIO = 2.4;
 
@@ -39,34 +40,6 @@ function texture(canvas) {
   map.colorSpace = THREE.SRGBColorSpace;
   map.anisotropy = 4;
   return map;
-}
-
-/**
- * The frame's colour and hinge height (fraction of the photo height), read
- * from the outer ends of the glasses photo where the arms attach.
- */
-function readHinges(canvas) {
-  const { width, height } = canvas;
-  const pixels = canvas.getContext("2d").getImageData(0, 0, width, height).data;
-  const edge = Math.max(2, Math.round(width * 0.06));
-  let red = 0, green = 0, blue = 0, rows = 0, count = 0;
-
-  for (let y = 0; y < height; y += 1) {
-    for (const x0 of [0, width - edge]) {
-      for (let x = x0; x < x0 + edge; x += 1) {
-        const i = (y * width + x) * 4;
-        if (pixels[i + 3] < 200) continue;
-        red += pixels[i];
-        green += pixels[i + 1];
-        blue += pixels[i + 2];
-        rows += y;
-        count += 1;
-      }
-    }
-  }
-  if (!count) return { color: new THREE.Color(0x2a2a2e), hingeY: 0.3 };
-  const color = new THREE.Color().setRGB(red / count / 255, green / count / 255, blue / count / 255, THREE.SRGBColorSpace);
-  return { color, hingeY: rows / count / height };
 }
 
 /** A plane whose sides curve back (negative z) like a frame or a strap. */
@@ -105,7 +78,6 @@ function basis(xAxis, yHint) {
 
 function buildGlasses(overlay) {
   const canvas = toCanvas(overlay.image);
-  const { color, hingeY } = readHinges(canvas);
   const [leftX, leftY, rightX, rightY] = overlay.centres || [0.25, 0.5, 0.75, 0.5];
 
   // Model units: 1 = the distance between the lens centres.
@@ -124,38 +96,11 @@ function buildGlasses(overlay) {
   front.renderOrder = 2;
   glasses.add(front);
 
-  const templeMaterial = new THREE.MeshStandardMaterial({ color, roughness: 0.45, metalness: 0.25 });
-  const temples = [-1, 1].map((side) => {
-    const temple = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.085, 1), templeMaterial);
-    temple.renderOrder = 1;
-    glasses.add(temple);
-    return { side, mesh: temple };
-  });
-
-  const hinge = {
-    x: (width / 2) * 0.96,
-    y: offsetY + (0.5 - hingeY) * height,
-    z: -bend * 0.96 * 0.96,
-  };
-  return { glasses, front, temples, hinge };
+  // Width of the whole photo in model units, for sizing against the face.
+  return { glasses, front, frameWidth: width };
 }
 
-function placeTemples(model, faceHalfWidth, templeLength) {
-  for (const { side, mesh } of model.temples) {
-    const start = new THREE.Vector3(side * model.hinge.x, model.hinge.y, model.hinge.z);
-    const end = new THREE.Vector3(
-      side * Math.max(model.hinge.x, faceHalfWidth * 0.98),
-      model.hinge.y - templeLength * 0.08,
-      model.hinge.z - templeLength
-    );
-    const direction = end.clone().sub(start);
-    mesh.scale.set(1, 1, direction.length());
-    mesh.position.copy(start).add(end).multiplyScalar(0.5);
-    mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), direction.normalize());
-  }
-}
-
-function glassesPose(landmarks, width, height, { size, lift }) {
+function glassesPose(landmarks, width, height, { size, lift }, frameWidth) {
   const at = (index) => {
     const { x, y, z } = landmarks[index];
     return new THREE.Vector3(x * width, (1 - y) * height, -z * width);
@@ -174,14 +119,11 @@ function glassesPose(landmarks, width, height, { size, lift }) {
     .add(axes.z.clone().multiplyScalar(frontDepth));
 
   const faceWidth = at(FACE_SIDES[0]).distanceTo(at(FACE_SIDES[1]));
-  const scale = pupils * LENS_SPREAD * size;
-  return {
-    position,
-    quaternion: axes.quaternion,
-    scale,
-    // Head size in model units (the glasses group is scaled by `scale`).
-    extra: { faceHalf: faceWidth / 2 / scale, depth: frontDepth / scale, pupils },
-  };
+  // Two size estimates: lens centres over the pupils, and the frame about as
+  // wide as the face. The face keeps the size right for frames with an
+  // unusually wide or narrow bridge.
+  const scale = frameScale(pupils * LENS_SPREAD, (faceWidth * FACE_FILL) / frameWidth) * size;
+  return { position, quaternion: axes.quaternion, scale, extra: null };
 }
 
 // --------------------------------------------------
@@ -267,17 +209,9 @@ export function createTryOn3d(category, overlay) {
   scene.add(pivot);
 
   let model;
-  let head = null;
   if (category === "glasses") {
     model = buildGlasses(overlay);
     pivot.add(model.glasses);
-    // Invisible head: writes depth only, so arms behind the head are hidden.
-    head = new THREE.Mesh(
-      new THREE.SphereGeometry(1, 32, 20),
-      new THREE.MeshBasicMaterial({ colorWrite: false })
-    );
-    head.renderOrder = 0;
-    pivot.add(head);
   } else {
     model = buildWatch(overlay);
     pivot.add(model.watch);
@@ -298,22 +232,13 @@ export function createTryOn3d(category, overlay) {
     }
 
     const next = category === "glasses"
-      ? glassesPose(landmarks, width, height, adjust)
+      ? glassesPose(landmarks, width, height, adjust, model.frameWidth)
       : watchPose(landmarks, width, height, adjust);
     pose = still ? next : smoothPose(pose, next);
 
     pivot.position.copy(pose.position);
     pivot.quaternion.copy(pose.quaternion);
     pivot.scale.setScalar(pose.scale);
-
-    if (head && pose.extra) {
-      const { faceHalf, depth } = pose.extra;
-      placeTemples(model, faceHalf, faceHalf * 1.9);
-      // Ellipsoid roughly the size of the head, its front at the eyes.
-      const radiusZ = faceHalf * 1.25;
-      head.scale.set(faceHalf * 0.9, faceHalf * 1.35, radiusZ);
-      head.position.set(0, faceHalf * 0.2, -depth - radiusZ * 0.92);
-    }
 
     renderer.render(scene, camera);
     return renderer.domElement;

@@ -4,6 +4,7 @@ import { formatPrice } from "../lib/products.js";
 import {
   createTracker,
   detect,
+  addShadow,
   drawProduct,
   loadOverlay,
   placement,
@@ -23,6 +24,7 @@ function drawTryOn(context, { landmarks, width, height, mirror, adjust, still, s
     if (!layer) return false;
     // The 3D layer is rendered in camera coordinates; mirror it like the video.
     context.save();
+    if (category === "glasses") addShadow(context, width * 0.25);
     if (mirror) {
       context.translate(width, 0);
       context.scale(-1, 1);
@@ -71,6 +73,7 @@ export default function LiveTryOnDialog({ product, onClose }) {
   const streamRef = useRef(null);
   const photoRef = useRef(null); // { image, landmarks }
   const adjustRef = useRef({ size: 1, lift: 0 });
+  const sourceRequestRef = useRef(0); // the latest camera/photo choice wins
   const sceneRef = useRef(null); // 3D try-on, when WebGL is available
   const viewRef = useRef("3d");
 
@@ -94,11 +97,17 @@ export default function LiveTryOnDialog({ product, onClose }) {
     async (facingMode) => {
       stopCamera();
       setNotice("");
+      const request = ++sourceRequestRef.current;
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
           audio: false,
         });
+        // A photo was chosen while the camera was starting: keep the photo.
+        if (request !== sourceRequestRef.current) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
         streamRef.current = stream;
         const video = videoRef.current;
         video.srcObject = stream;
@@ -260,6 +269,7 @@ export default function LiveTryOnDialog({ product, onClose }) {
 
   async function choosePhoto(file) {
     if (!file || !trackerRef.current) return;
+    sourceRequestRef.current += 1;
     if (!file.type.startsWith("image/")) {
       setNotice("Please choose a photo (JPG, PNG or WebP).");
       return;
