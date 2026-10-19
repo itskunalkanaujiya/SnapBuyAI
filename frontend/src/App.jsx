@@ -21,8 +21,16 @@ import {
   writeHistory,
 } from "./lib/history.js";
 import { cropToFile, prepareForUpload } from "./lib/resizeImage.js";
-import { streamLook, streamOutfit, streamSearch, streamTextSearch } from "./lib/searchStream.js";
+import {
+  streamLook,
+  streamOutfit,
+  streamRating,
+  streamSearch,
+  streamTextSearch,
+} from "./lib/searchStream.js";
 import AssistantChat from "./components/AssistantChat.jsx";
+import ColoursDialog from "./components/ColoursDialog.jsx";
+import { PaletteContext, paletteMatcher, readPalette, writePalette } from "./lib/palette.js";
 import {
   ALLOWED_IMAGE_TYPES,
   DEFAULT_FILTERS,
@@ -128,6 +136,13 @@ export default function App() {
   const [returnTo, setReturnTo] = useState(null);
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [saved, setSaved] = useState(readSaved);
+  // "Colours that suit you": the palette from a selfie, kept in this browser.
+  const [palette, setPalette] = useState(readPalette);
+  const [showColours, setShowColours] = useState(false);
+  const paletteValue = useMemo(
+    () => (palette ? { ...palette, suitsYou: paletteMatcher(palette) } : null),
+    [palette]
+  );
   const [history, setHistory] = useState(readHistory);
 
   const savedIds = useMemo(() => new Set(saved.map(getProductId)), [saved]);
@@ -253,6 +268,7 @@ export default function App() {
 
   const closeCrop = useCallback(() => setIsCropping(false), []);
   const closeTryOn = useCallback(() => setTryOnProduct(null), []);
+  const closeColours = useCallback(() => setShowColours(false), []);
 
   // Reopen a recent search: its photo and results, without searching again.
   function openRecent(entry) {
@@ -483,6 +499,28 @@ export default function App() {
     );
   }
 
+  // AI stylist: score the outfit in the photo and shop what would improve it.
+  async function rateOutfit() {
+    if (!file) {
+      setError("Please upload a photo of the outfit first.");
+      return;
+    }
+
+    setReturnTo(null);
+    await streamItems(
+      { kind: "rating", rating: null, gender: "", items: [], photoUrl: URL.createObjectURL(file) },
+      async (onEvent) => streamRating(await prepareForUpload(file), onEvent),
+      "Couldn't rate this outfit. Please try again."
+    );
+  }
+
+  function savePalette(next) {
+    setPalette(next);
+    writePalette(next);
+    setShowColours(false);
+    if (!next) setFilters((current) => ({ ...current, myColours: false }));
+  }
+
   // Suggest what goes with a product and shop each suggestion.
   async function completeLook(product) {
     if (isFindingOutfit || !product?.name) return;
@@ -546,6 +584,9 @@ export default function App() {
       let finished = false;
       await start((event) => {
         switch (event.type) {
+          case "rating":
+            setOutfit((current) => ({ ...current, rating: event.rating }));
+            break;
           case "items":
             setOutfit((current) => ({
               ...current,
@@ -560,6 +601,7 @@ export default function App() {
             finished = true;
             setOutfit((current) => ({
               ...current,
+              rating: event.rating ?? current.rating ?? null,
               gender: event.gender,
               items: event.items.map((item) => ({ ...item, pending: false })),
             }));
@@ -573,7 +615,7 @@ export default function App() {
       if (!finished) throw new Error("The search ended unexpectedly. Please try again.");
     } catch (outfitError) {
       setOutfit((current) =>
-        current?.items.length
+        current?.items.length || current?.rating
           ? { ...current, items: current.items.map((item) => ({ ...item, pending: false })) }
           : null
       );
@@ -645,6 +687,7 @@ export default function App() {
   );
 
   return (
+    <PaletteContext.Provider value={paletteValue}>
     <div className="app">
       <header className="site-header">
         <div className="container header-inner">
@@ -661,6 +704,23 @@ export default function App() {
             >
               <Icon name="search" size={16} />
               Discover
+            </button>
+            <button
+              type="button"
+              className={`nav-item nav-colours ${palette ? "has-palette" : ""}`}
+              onClick={() => setShowColours(true)}
+              title="Find the colours that suit you"
+            >
+              {palette ? (
+                <span className="nav-swatches" aria-hidden="true">
+                  {palette.best.slice(0, 3).map((colour) => (
+                    <span key={colour.name} style={{ background: colour.hex }} />
+                  ))}
+                </span>
+              ) : (
+                <Icon name="palette" size={16} />
+              )}
+              <span className="nav-label">My colours</span>
             </button>
             <button
               type="button"
@@ -757,7 +817,9 @@ export default function App() {
                     onUndoCrop={undoCrop}
                     onSearch={search}
                     onFindOutfit={findOutfit}
+                    onRateOutfit={rateOutfit}
                     isFindingOutfit={isFindingOutfit}
+                    busyKind={isFindingOutfit ? outfit?.kind : null}
                   />
                 ) : (
                   <TextSearchPanel
@@ -902,6 +964,10 @@ export default function App() {
         />
       )}
 
+      {showColours && (
+        <ColoursDialog palette={palette} onSave={savePalette} onClose={closeColours} />
+      )}
+
       {tryOnProduct &&
         (tryOnProduct.ar_category ? (
           <LiveTryOnDialog product={tryOnProduct} onClose={closeTryOn} />
@@ -920,5 +986,6 @@ export default function App() {
         </div>
       </footer>
     </div>
+    </PaletteContext.Provider>
   );
 }

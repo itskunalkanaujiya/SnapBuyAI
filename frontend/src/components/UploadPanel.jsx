@@ -96,7 +96,9 @@ export default function UploadPanel({
   onUndoCrop,
   onSearch,
   onFindOutfit,
+  onRateOutfit,
   isFindingOutfit = false,
+  busyKind = null,
 }) {
   const inputRef = useRef(null);
   const cameraRef = useRef(null);
@@ -290,29 +292,51 @@ export default function UploadPanel({
         )}
       </button>
 
-      <button
-        type="button"
-        className="button button-secondary search-button outfit-button"
-        onClick={onFindOutfit}
-        disabled={!file || isSearching || isFindingOutfit}
-      >
-        {isFindingOutfit ? (
-          <>
-            <span className="spinner" />
-            Finding the outfit…
-          </>
-        ) : (
-          <>
-            <Icon name="shirt" size={17} />
-            Find the outfit
-            <span className="new-pill">New</span>
-          </>
-        )}
-      </button>
+      <div className="outfit-actions">
+        <button
+          type="button"
+          className="button button-secondary search-button outfit-button"
+          onClick={onFindOutfit}
+          disabled={!file || isSearching || isFindingOutfit}
+        >
+          {isFindingOutfit && busyKind === "outfit" ? (
+            <>
+              <span className="spinner" />
+              Finding the outfit…
+            </>
+          ) : (
+            <>
+              <Icon name="shirt" size={17} />
+              Find the outfit
+            </>
+          )}
+        </button>
+
+        <button
+          type="button"
+          className="button button-secondary search-button rate-button"
+          onClick={onRateOutfit}
+          disabled={!file || isSearching || isFindingOutfit}
+          title="AI stylist: a score for the look, and what to add or swap"
+        >
+          {isFindingOutfit && busyKind === "rating" ? (
+            <>
+              <span className="spinner" />
+              Rating…
+            </>
+          ) : (
+            <>
+              <Icon name="star" size={17} />
+              Rate my outfit
+              <span className="new-pill">New</span>
+            </>
+          )}
+        </button>
+      </div>
 
       <p className="panel-footnote">
         <Icon name="shield" size={13} />
-        Your photo is sent to Google Lens (or, to find the outfit, an AI model) only to run this search, and isn't kept.
+        Your photo is sent to Google Lens (or, for the outfit features, an AI model) only to run this search, and isn't kept.
       </p>
     </div>
   );

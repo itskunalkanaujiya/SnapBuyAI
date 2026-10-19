@@ -276,30 +276,42 @@ def read_outfit(data, frame, order):
     return {"gender": gender if gender in GENDERS else "unisex", "items": items}
 
 
-def identify_outfit(image):
+def ask_vision(image, prompt, not_set_up="Find the outfit isn't set up on this server yet."):
     """
-    The items the main person wears: {"gender", "items": [{"id", "type",
-    "description", "box"}]}. Tries each vision provider in turn; raises
-    OutfitError with a user-facing message if none can answer.
+    Ask the best available vision model about a photo; returns (answer,
+    frame, box order, provider name). "BOX_FORMAT" in the prompt becomes the
+    provider's box format. Tries each provider in turn; raises OutfitError
+    with a user-facing message if none can answer.
     """
     providers = vision_providers()
     if not providers:
-        raise OutfitError("Find the outfit isn't set up on this server yet.")
+        raise OutfitError(not_set_up)
 
     square, frame = square_photo(image)
     photo_url = _data_url(square)
     error = None
     for name, url, api_key, models, order in providers:
-        prompt = PROMPT.replace("BOX_FORMAT", BOX_FORMATS[order])
         try:
-            outfit = read_outfit(ask_vision_model(url, api_key, models, prompt, photo_url), frame, order)
+            answer = ask_vision_model(
+                url, api_key, models, prompt.replace("BOX_FORMAT", BOX_FORMATS[order]), photo_url
+            )
         except OutfitError as exc:
-            print(f"{name} could not identify the outfit: {exc}")
+            print(f"{name} could not answer: {exc}")
             error = exc
             continue
-        outfit["model"] = name
-        return outfit
+        return answer, frame, order, name
     raise error
+
+
+def identify_outfit(image):
+    """
+    The items the main person wears: {"gender", "items": [{"id", "type",
+    "description", "box"}], "model"}. Raises OutfitError.
+    """
+    answer, frame, order, name = ask_vision(image, PROMPT)
+    outfit = read_outfit(answer, frame, order)
+    outfit["model"] = name
+    return outfit
 
 
 def item_query(item, gender):

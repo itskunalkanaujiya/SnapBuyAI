@@ -984,6 +984,29 @@ def find_page_availability(soup, hostname, offers):
     return None
 
 
+# The "was" price Indian stores print beside the selling price, e.g.
+# "M.R.P.: ₹2,999" or "MRP ₹1,499" (fake-discount check on the results page).
+MRP_PATTERN = re.compile(
+    r"(?:\bM\.?\s?R\.?\s?P\.?|\bList\s+Price|Maximum\s+Retail\s+Price)"
+    r"[^0-9\u20b9<]{0,40}(?:<[^>]{0,200}>\s*){0,4}"
+    r"(?:\u20b9|&#8377;|&#x20b9;|Rs\.?|INR)\s*(?:<[^>]{0,200}>\s*){0,2}"
+    r"([0-9][0-9,]*(?:\.[0-9]{1,2})?)",
+    re.IGNORECASE,
+)
+MAX_MRP_FACTOR = 10  # an "MRP" over 10x the price is another product's
+
+
+def find_mrp(html, price):
+    """The page's MRP when it's above the selling price, else None."""
+    if not html or not price:
+        return None
+    for match in MRP_PATTERN.finditer(html[:600000]):
+        mrp = parse_numeric_price(match.group(1))
+        if mrp and price < mrp <= MAX_MRP_FACTOR * price:
+            return mrp
+    return None
+
+
 def fetch_page_details(url):
     """
     Fetch a seller page and read its price and stock status.
@@ -996,6 +1019,7 @@ def fetch_page_details(url):
         "price": None,
         "price_text": None,
         "currency": None,
+        "original_price": None,
         "availability": None,
         "is_product_page": None,
         "fetched": False,
@@ -1039,6 +1063,7 @@ def fetch_page_details(url):
 
         if price_info:
             details.update(price_info)
+            details["original_price"] = find_mrp(html, price_info.get("price"))
 
         details["availability"] = availability
         details["is_product_page"] = is_product
@@ -1102,8 +1127,15 @@ def resolve_offer(item):
             "currency": "INR",
         }
 
+    # The page's MRP, when it belongs to the price shown.
+    original = page.get("original_price")
+    if not (original and price_info["price"] and original > price_info["price"]
+            and page.get("price") == price_info["price"]):
+        original = None
+
     return {
         **price_info,
+        "original_price": original,
         "availability": availability or UNKNOWN_AVAILABILITY,
     }
 
@@ -1290,6 +1322,12 @@ def build_product(item, pending=False):
         "price": offer["price"],
         "price_text": offer["price_text"],
         "currency": offer["currency"],
+        "original_price": offer.get("original_price"),
+        "original_price_text": (
+            format_price_text(offer["original_price"], offer["currency"] or "INR")
+            if offer.get("original_price")
+            else None
+        ),
         "availability": offer["availability"],
         "marketplace": item.get("source") or "Unknown seller",
         "product_url": item.get("link"),

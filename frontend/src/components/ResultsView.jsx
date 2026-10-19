@@ -3,6 +3,7 @@ import Icon from "./Icon.jsx";
 import { formatTimeAgo } from "../lib/history.js";
 import ProductCard, { ProductCardSkeleton } from "./ProductCard.jsx";
 import { computeDeals } from "../lib/deals.js";
+import { usePalette } from "../lib/palette.js";
 import {
   DEFAULT_FILTERS,
   applyFilters,
@@ -27,7 +28,7 @@ function Stat({ icon, label, value }) {
   );
 }
 
-function Toolbar({ filters, onChange, stores, shownCount, totalCount, hasMatchScores }) {
+function Toolbar({ filters, onChange, stores, shownCount, totalCount, hasMatchScores, hasPalette }) {
   const set = (key) => (event) => onChange({ ...filters, [key]: event.target.value });
   const active = hasActiveFilters(filters);
 
@@ -80,6 +81,19 @@ function Toolbar({ filters, onChange, stores, shownCount, totalCount, hasMatchSc
         <option value="price-low">Sort: Price, low to high</option>
         <option value="price-high">Sort: Price, high to low</option>
       </select>
+
+      {hasPalette && (
+        <button
+          type="button"
+          className={`field colours-toggle ${filters.myColours ? "is-active" : ""}`}
+          aria-pressed={filters.myColours}
+          onClick={() => onChange({ ...filters, myColours: !filters.myColours })}
+          title="Show only listings in the colours that suit you"
+        >
+          <Icon name="palette" size={15} />
+          My colours
+        </button>
+      )}
 
       <div className="toolbar-end">
         <span className="toolbar-count">
@@ -254,12 +268,15 @@ export default function ResultsView({
     };
   }, [allProducts]);
 
+  const palette = usePalette();
+  const suitsYou = palette?.suitsYou;
+
   // Deal score compares each price with the typical price of this search.
   const deals = useMemo(() => computeDeals(allProducts), [allProducts]);
-  const filteredDupes = useMemo(() => applyFilters(dupes, filters), [dupes, filters]);
+  const filteredDupes = useMemo(() => applyFilters(dupes, filters, suitsYou), [dupes, filters, suitsYou]);
 
-  const filteredBest = useMemo(() => applyFilters(bestMatches, filters), [bestMatches, filters]);
-  const filteredCheapest = useMemo(() => applyFilters(cheapest, filters), [cheapest, filters]);
+  const filteredBest = useMemo(() => applyFilters(bestMatches, filters, suitsYou), [bestMatches, filters, suitsYou]);
+  const filteredCheapest = useMemo(() => applyFilters(cheapest, filters, suitsYou), [cheapest, filters, suitsYou]);
   const shownCount = new Set(
     [...filteredBest, ...filteredCheapest].map(getProductId)
   ).size;
@@ -351,6 +368,7 @@ export default function ResultsView({
         shownCount={shownCount}
         totalCount={allProducts.length}
         hasMatchScores={stats.hasMatchScores}
+        hasPalette={Boolean(palette)}
       />
 
       {shownCount === 0 ? (

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import Icon from "./Icon.jsx";
 import { canTryOn } from "../lib/tryon.js";
 import { canTryOnLive, loadOverlay } from "../lib/liveTryOn.js";
+import { usePalette } from "../lib/palette.js";
 import {
   AVAILABILITY_LABELS,
   formatAmount,
@@ -54,9 +55,12 @@ function useLiveReady(product, enabled) {
   return live && ready;
 }
 
+const DEAL_ICONS = { high: "alert", fake: "alert", real: "check" };
+
 export default function ProductCard({ product, isSaved, onToggleSave, onTryOn, onCompleteLook, highlight, deal }) {
   const [imageFailed, setImageFailed] = useState(!product.image_url);
   const liveReady = useLiveReady(product, Boolean(onTryOn));
+  const suits = usePalette()?.suitsYou(product);
 
   const match = getMatchLevel(product);
   const availability = getAvailability(product);
@@ -92,6 +96,12 @@ export default function ProductCard({ product, isSaved, onToggleSave, onTryOn, o
             <span className="badge badge-accent">
               <Icon name="tag" size={12} />
               {highlight}
+            </span>
+          )}
+          {suits && (
+            <span className="badge badge-suits" title={`${suits.name} is one of your colours`}>
+              <span className="swatch" style={{ background: suits.hex }} aria-hidden="true" />
+              Suits you
             </span>
           )}
           {match && (
@@ -187,7 +197,7 @@ export default function ProductCard({ product, isSaved, onToggleSave, onTryOn, o
           </p>
         ) : deal ? (
           <p className={`deal deal-${deal.tone}`} title={deal.title}>
-            <Icon name={deal.tone === "high" ? "alert" : "tag"} size={13} />
+            <Icon name={DEAL_ICONS[deal.tone] || "tag"} size={13} />
             <span>
               <strong>{deal.label}</strong> · {deal.detail}
             </span>

@@ -16,6 +16,7 @@ export const DEFAULT_FILTERS = {
   minMatch: "any",
   store: "all",
   sort: "relevance",
+  myColours: false,
 };
 
 export function getProductId(product) {
@@ -99,7 +100,8 @@ export function hasActiveFilters(filters) {
   );
 }
 
-export function applyFilters(products, filters) {
+// suitsYou: optional (product) => palette colour or null ("My colours" filter).
+export function applyFilters(products, filters, suitsYou) {
   const query = filters.text.trim().toLowerCase();
   const budget = filters.maxPrice === "" ? null : Number(filters.maxPrice);
   const minimumRank =
@@ -128,6 +130,10 @@ export function applyFilters(products, filters) {
     }
 
     if (filters.store !== "all" && product.marketplace !== filters.store) {
+      return false;
+    }
+
+    if (filters.myColours && suitsYou && !suitsYou(product)) {
       return false;
     }
 

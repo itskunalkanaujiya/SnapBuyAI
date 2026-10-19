@@ -76,6 +76,22 @@ export async function streamOutfit(file, onEvent) {
   await readEventStream(response, onEvent);
 }
 
+/**
+ * Rate my outfit: streams "rating" (score, verdict, strengths), then
+ * shoppable suggestions like Find the outfit ("items", one "item" each).
+ */
+export async function streamRating(file, onEvent) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await fetch(`${API_URL}/api/v1/style/rate/stream`, {
+    method: "POST",
+    body: formData,
+  });
+
+  await readEventStream(response, onEvent);
+}
+
 /** Run a streamed search for a typed product description. */
 export async function streamTextSearch(query, onEvent) {
   const response = await fetch(`${API_URL}/api/v1/products/search-by-text/stream`, {

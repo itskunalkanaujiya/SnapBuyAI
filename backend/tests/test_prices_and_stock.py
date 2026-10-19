@@ -116,3 +116,41 @@ def test_fast_and_full_parse_agree():
         full = s.read_page_details(BeautifulSoup(html, "html.parser"), html, url)
         if fast[0] is not None:  # the fast path is only used when it finds a price
             assert fast == full, url
+
+
+@pytest.mark.parametrize(
+    "html, price, mrp",
+    [
+        ('<span>M.R.P.: <span class="a-text-price"><span>&#8377;2,999</span></span></span>', 899, 2999),
+        ("<div>MRP <s>₹1,499</s></div>", 999, 1499),
+        ("<p>List Price: Rs. 4,500.00</p>", 3999, 4500),
+        ("Maximum Retail Price ₹ 1,299 (incl. of all taxes)", 649, 1299),
+        # Below the price, or far above it (another product): ignored.
+        ("MRP ₹500", 899, None),
+        ("MRP ₹99,999 for the TV bundle", 899, None),
+        ("No MRP here", 899, None),
+    ],
+)
+def test_find_mrp(html, price, mrp):
+    assert s.find_mrp(html, price) == mrp
+
+
+def test_page_mrp_becomes_the_original_price(monkeypatch):
+    page = """<meta property="product:price:amount" content="899">
+        <meta property="product:price:currency" content="INR">
+        <div>MRP <s>₹2,999</s></div>"""
+    monkeypatch.setattr(s.requests, "get", lambda url, **kwargs: FakeResponse(page))
+
+    details = s.fetch_page_details("https://shop.in/kurta")
+    assert (details["price"], details["original_price"]) == (899, 2999)
+
+    offer = s.resolve_offer({"link": "https://shop.in/kurta", "_page_details": details})
+    assert offer["original_price"] == 2999
+
+    # An MRP read from the page doesn't apply to a different (Lens) price.
+    other = s.resolve_offer({
+        "link": "https://shop.in/kurta",
+        "price": {"value": "₹1,099", "extracted_value": 1099, "currency": "₹"},
+        "_page_details": details,
+    })
+    assert other["price"] == 1099 and other["original_price"] is None

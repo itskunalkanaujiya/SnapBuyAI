@@ -1437,6 +1437,8 @@ label.field input::placeholder {
 .card-badges {
   position: absolute;
   top: 10px;
+  /* Clear of the save button. */
+  right: 52px;
   left: 10px;
   display: flex;
   flex-wrap: wrap;
@@ -5084,5 +5086,364 @@ a.chat-pick:hover {
   .chat-panel,
   .chat-typing span {
     animation: none;
+  }
+}
+
+/* ---------- Fake discount detector ---------- */
+
+.deal-fake {
+  color: #b91c1c;
+}
+
+.deal-real {
+  color: #15803d;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .deal-fake {
+    color: #f87171;
+  }
+
+  :root:not([data-theme="light"]) .deal-real {
+    color: #4ade80;
+  }
+}
+
+:root[data-theme="dark"] .deal-fake {
+  color: #f87171;
+}
+
+:root[data-theme="dark"] .deal-real {
+  color: #4ade80;
+}
+
+/* ---------- Rate my outfit ---------- */
+
+.outfit-actions {
+  display: grid;
+  margin-top: 10px;
+  gap: 10px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.outfit-actions .search-button {
+  margin-top: 0;
+}
+
+.rating {
+  display: grid;
+  align-items: center;
+  margin: 10px 0 18px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, var(--primary-soft), transparent 70%);
+  column-gap: 16px;
+  grid-template-columns: auto 1fr;
+  row-gap: 12px;
+}
+
+.rating-score {
+  position: relative;
+  width: 84px;
+  height: 84px;
+}
+
+.rating-score svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.rating-track,
+.rating-fill {
+  fill: none;
+  stroke-width: 7;
+}
+
+.rating-track {
+  stroke: var(--border);
+}
+
+.rating-fill {
+  stroke: var(--primary);
+  stroke-linecap: round;
+  animation: rating-draw 1s var(--ease) both;
+}
+
+.rating-great .rating-fill {
+  stroke: #16a34a;
+}
+
+.rating-fair .rating-fill {
+  stroke: #f59e0b;
+}
+
+@keyframes rating-draw {
+  from {
+    stroke-dashoffset: 213.6;
+  }
+}
+
+.rating-score > span {
+  position: absolute;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  inset: 0;
+  padding-top: 26px;
+  color: var(--text);
+}
+
+.rating-score strong {
+  font-size: 24px;
+  line-height: 1;
+}
+
+.rating-score small {
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.rating-verdict {
+  margin: 0 0 8px;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.rating-text .pill {
+  gap: 5px;
+}
+
+.rating-strengths {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0;
+  padding: 0;
+  gap: 8px;
+  grid-column: 1 / -1;
+  list-style: none;
+}
+
+.rating-strengths li {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--success-soft);
+  color: var(--success);
+  font-size: 13px;
+  font-weight: 600;
+  gap: 5px;
+}
+
+.rating-fixes-title {
+  margin: 4px 0 2px;
+  color: var(--text);
+  font-size: 18px;
+}
+
+/* ---------- Colours that suit you ---------- */
+
+.nav-colours .nav-swatches {
+  display: inline-flex;
+}
+
+.nav-swatches span {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+}
+
+.nav-swatches span + span {
+  margin-left: -5px;
+}
+
+.swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  flex: none;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 50%;
+}
+
+.badge-suits {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.92);
+  color: #3b2f8f;
+  gap: 5px;
+}
+
+.suits-chip {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--primary-soft);
+  color: var(--primary-text);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.colours-toggle {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-2);
+  cursor: pointer;
+  font-weight: 600;
+  gap: 6px;
+}
+
+.colours-toggle.is-active {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary-text);
+}
+
+.colours-modal {
+  width: min(720px, 100%);
+}
+
+.colours-body {
+  display: grid;
+  padding: 20px 24px;
+  gap: 20px;
+  grid-template-columns: 200px 1fr;
+}
+
+.colours-photo {
+  position: relative;
+  display: grid;
+  overflow: hidden;
+  aspect-ratio: 3 / 4;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  place-items: center;
+}
+
+.colours-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.colours-photo-empty {
+  color: var(--primary);
+}
+
+.colours-scanning {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  inset: auto 0 0;
+  padding: 10px;
+  background: rgba(15, 12, 30, 0.72);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  gap: 8px;
+}
+
+.colours-intro,
+.colours-summary {
+  margin: 0 0 12px;
+  color: var(--text-2);
+  font-size: 14.5px;
+  line-height: 1.55;
+}
+
+.colours-season {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: 0 0 6px;
+  gap: 10px;
+}
+
+.colours-season strong {
+  color: var(--text);
+  font-size: 22px;
+}
+
+.colours-season .pill {
+  text-transform: capitalize;
+}
+
+.colours-result h3 {
+  margin: 14px 0 8px;
+  color: var(--text-3);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0;
+  padding: 0;
+  gap: 8px;
+  list-style: none;
+}
+
+.swatches li {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px 5px 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  gap: 6px;
+  text-transform: capitalize;
+}
+
+.swatches li .swatch {
+  width: 18px;
+  height: 18px;
+}
+
+.swatches.is-muted li {
+  color: var(--text-3);
+  opacity: 0.75;
+}
+
+.colours-modal .modal-footer {
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.colours-modal .modal-footer .panel-footnote {
+  flex: 1 1 260px;
+  margin: 0;
+}
+
+@media (max-width: 640px) {
+  .colours-body {
+    padding: 16px;
+    grid-template-columns: 1fr;
+  }
+
+  .colours-photo {
+    max-width: 180px;
+  }
+
+  .nav-colours .nav-label {
+    display: none;
+  }
+
+  .outfit-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .rating {
+    grid-template-columns: 1fr;
+    justify-items: start;
   }
 }

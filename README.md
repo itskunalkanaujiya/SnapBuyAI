@@ -38,6 +38,25 @@ and alike, as clear-lens holes or tinted areas), so the frame on the face is
 always the real product photo. Users can also use a photo, adjust size and
 position, and save a picture.
 
+**Rate my outfit.** Next to Find the outfit: the vision model scores the
+look out of 10, says what works, and suggests 2-3 new items to add or swap
+(`backend/style_service.py`), each searched like an outfit item so every tip
+is shoppable. It judges only clothes and styling, never the person.
+
+**Colours that suit you.** "My colours" in the header: from a selfie, the
+vision model reads undertone and contrast and returns a seasonal palette in
+shopping colour words. The selfie isn't kept; the palette stays in the
+browser. Listings whose names mention one of the colours (or a synonym:
+burgundy for maroon, ivory for cream) get a "Suits you" badge, and a
+"My colours" filter shows only those.
+
+**Fake discount detector.** When a listing has a "was" price (SerpApi
+Google Shopping, or the MRP read from the store page during a photo
+search), a big claimed discount on a price no lower than similar listings
+is flagged "Discount looks inflated"; a claimed discount that is also below
+the typical price is a "Real discount". Serper's shopping results carry no
+"was" prices, so typed searches through Serper don't get this check.
+
 **Complete the look.** Every product card has a "Complete the look" button:
 a Groq text model suggests 3-4 items that go with it (chinos and loafers
 for a shirt, a bag and a mouse for a laptop), each with a one-line reason,

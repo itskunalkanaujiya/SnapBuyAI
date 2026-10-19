@@ -24,7 +24,8 @@ from image_shopping_service import (
     search_products_by_image as search_online_products,
 )
 from text_shopping_service import search_products_by_text as search_shopping_text
-from outfit_service import complete_the_look, find_outfit
+from outfit_service import OutfitError, complete_the_look, find_outfit
+from style_service import analyse_colours, rate_outfit
 from assistant_service import AssistantError, ask_assistant
 from tryon_service import GARMENT_WORDS, TryOnError, product_overlay, try_on
 
@@ -975,3 +976,51 @@ async def shopping_assistant(request: Request, body: AssistantRequest):
         return await run_in_threadpool(ask_assistant, body.messages, body.products, body.query)
     except AssistantError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc))
+
+
+# --------------------------------------------------
+# Personal styling: rate my outfit, colours that suit you
+# --------------------------------------------------
+
+# Colour analysis only uses the vision model (no searches); its own limit.
+STYLE_LIMIT = int(os.getenv("STYLE_LIMIT", "10"))
+STYLE_WINDOW_SECONDS = int(os.getenv("STYLE_WINDOW_SECONDS", "600"))
+_style_log = {}
+
+
+@app.post("/api/v1/style/rate/stream")
+async def rate_outfit_stream(request: Request, file: UploadFile = File(...)):
+    """
+    Rate the outfit in a photo and shop the suggested changes, streamed:
+    "stage", "rating" (score, verdict, occasion, strengths), "items", one
+    "item" per suggestion, then "final" (or "error").
+    """
+    image = await read_uploaded_image(file)
+    fingerprint = await run_in_threadpool(image_fingerprint, image)
+    cache_key = f"rate:{fingerprint}"
+
+    cached = get_cached_search(cache_key)
+    if cached is None:
+        check_search_limit(request)
+
+    return stream_search_response(
+        cache_key,
+        cached,
+        first_stage="rating",
+        run=lambda emit: rate_outfit(image, on_event=emit),
+        shape=lambda rated: rated,
+    )
+
+
+@app.post("/api/v1/style/colours")
+async def colours_that_suit(request: Request, file: UploadFile = File(...)):
+    """
+    The clothing colours that suit the person in a selfie: {undertone,
+    season, summary, best: [{name, hex}], avoid}. The selfie isn't kept.
+    """
+    enforce_limit(request, _style_log, STYLE_LIMIT, STYLE_WINDOW_SECONDS, "colour checks")
+    image = await read_uploaded_image(file)
+    try:
+        return await run_in_threadpool(analyse_colours, image)
+    except OutfitError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))

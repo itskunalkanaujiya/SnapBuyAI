@@ -138,6 +138,56 @@ function OutfitPhoto({ photoUrl, alt, items, activeId, onActivate, scanning }) {
   );
 }
 
+const SCORE_RING_RADIUS = 34;
+
+/** Rate my outfit: the score as a ring, the verdict and what works. */
+function RatingSummary({ rating }) {
+  const circumference = 2 * Math.PI * SCORE_RING_RADIUS;
+  const share = Math.min(1, Math.max(0, rating.score / 10));
+  const tone = rating.score >= 8 ? "great" : rating.score >= 6 ? "good" : "fair";
+
+  return (
+    <div className={`rating rating-${tone}`}>
+      <div className="rating-score" role="img" aria-label={`Style score ${rating.score} out of 10`}>
+        <svg viewBox="0 0 80 80" aria-hidden="true">
+          <circle className="rating-track" cx="40" cy="40" r={SCORE_RING_RADIUS} />
+          <circle
+            className="rating-fill"
+            cx="40"
+            cy="40"
+            r={SCORE_RING_RADIUS}
+            strokeDasharray={circumference}
+            strokeDashoffset={circumference * (1 - share)}
+          />
+        </svg>
+        <span>
+          <strong>{rating.score.toFixed(1)}</strong>
+          <small>/10</small>
+        </span>
+      </div>
+      <div className="rating-text">
+        <p className="rating-verdict">{rating.verdict}</p>
+        {rating.occasion && (
+          <span className="pill pill-outline">
+            <Icon name="sparkles" size={12} />
+            Best for: {rating.occasion}
+          </span>
+        )}
+      </div>
+      {rating.strengths?.length > 0 && (
+        <ul className="rating-strengths">
+          {rating.strengths.map((strength) => (
+            <li key={strength}>
+              <Icon name="check" size={14} />
+              {capitalise(strength)}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function ItemSection({ item, index, thumbnail, savedIds, onToggleSave, onTryOn, onMore, onExactMatch }) {
   const products = itemProducts(item);
   const lowest = lowestPrice(item);
@@ -226,16 +276,19 @@ function ItemSection({ item, index, thumbnail, savedIds, onToggleSave, onTryOn, 
 export default function OutfitView({ outfit, photoUrl, savedIds, onToggleSave, onTryOn, onMore, onBack, onExactMatch }) {
   const items = useMemo(() => outfit.items || [], [outfit.items]);
   const isLook = outfit.kind === "look";
+  const isRating = outfit.kind === "rating";
   const baseProduct = isLook ? outfit.product : null;
-  const cropped = useItemThumbnails(isLook ? "" : photoUrl, items);
-  // A look has no photo to crop from; use each item's first listing.
-  const thumbnails = isLook
+  // Suggestions (a look's or a rating's) aren't in the photo, so there's
+  // nothing to crop; use each item's first listing instead.
+  const suggested = isLook || isRating;
+  const cropped = useItemThumbnails(suggested ? "" : photoUrl, items);
+  const thumbnails = suggested
     ? Object.fromEntries(items.map((item) => [item.id, itemProducts(item)[0]?.image_url]))
     : cropped;
   const [activeId, setActiveId] = useState(null);
   const basePrice = baseProduct ? getNumericPrice(baseProduct) : null;
 
-  const scanning = items.length === 0;
+  const scanning = isRating ? !outfit.rating : items.length === 0;
   const remaining = items.filter((item) => item.pending).length;
   const lookPrices = items.map(lowestPrice).filter((price) => price !== null);
   const lookTotal = lookPrices.reduce((sum, price) => sum + price, basePrice ?? 0);
@@ -263,7 +316,9 @@ export default function OutfitView({ outfit, photoUrl, savedIds, onToggleSave, o
         )}
 
         <div className="outfit-overview">
-          <span className="eyebrow">{isLook ? "Complete the look" : "Find the outfit"}</span>
+          <span className="eyebrow">
+            {isRating ? "Rate my outfit" : isLook ? "Complete the look" : "Find the outfit"}
+          </span>
           {baseProduct && (
             <p className="look-base">
               Styling <strong>{baseProduct.name}</strong>
@@ -272,11 +327,15 @@ export default function OutfitView({ outfit, photoUrl, savedIds, onToggleSave, o
           )}
           {scanning ? (
             <>
-              <h2>{isLook ? "Styling the look…" : "Looking at the outfit…"}</h2>
+              <h2>
+                {isRating ? "Your stylist is looking…" : isLook ? "Styling the look…" : "Looking at the outfit…"}
+              </h2>
               <p className="outfit-lead">
-                {isLook
-                  ? "AI is picking what goes with it. This usually takes a few seconds."
-                  : "AI is spotting each item they're wearing. This usually takes a couple of seconds."}
+                {isRating
+                  ? "AI is checking the fit, colours and accessories. This takes a few seconds."
+                  : isLook
+                    ? "AI is picking what goes with it. This usually takes a few seconds."
+                    : "AI is spotting each item they're wearing. This usually takes a couple of seconds."}
               </p>
               <div className="outfit-list" aria-hidden="true">
                 {Array.from({ length: 3 }, (_, index) => (
@@ -289,16 +348,23 @@ export default function OutfitView({ outfit, photoUrl, savedIds, onToggleSave, o
             </>
           ) : (
             <>
-              <h2>
-                {items.length} item{items.length === 1 ? "" : "s"} {isLook ? "that go with it" : "spotted"}
-              </h2>
-              <p className="outfit-lead">
-                {remaining > 0
-                  ? `Finding shopping options for ${remaining} item${remaining === 1 ? "" : "s"}…`
-                  : `Tap an item to see its options${audience ? ` for ${audience}` : ""}.`}
-              </p>
+              {isRating && <RatingSummary rating={outfit.rating} />}
+              {isRating ? (
+                items.length > 0 && <h3 className="rating-fixes-title">Level it up</h3>
+              ) : (
+                <h2>
+                  {items.length} item{items.length === 1 ? "" : "s"} {isLook ? "that go with it" : "spotted"}
+                </h2>
+              )}
+              {(items.length > 0 || !isRating) && (
+                <p className="outfit-lead">
+                  {remaining > 0
+                    ? `Finding shopping options for ${remaining} item${remaining === 1 ? "" : "s"}…`
+                    : `Tap ${isRating ? "a suggestion" : "an item"} to see its options${audience ? ` for ${audience}` : ""}.`}
+                </p>
+              )}
 
-              {remaining === 0 && pricedCount > 1 && (
+              {remaining === 0 && pricedCount > 1 && !isRating && (
                 <div className="outfit-total">
                   <Icon name="tag" size={18} />
                   <span>
@@ -328,7 +394,7 @@ export default function OutfitView({ outfit, photoUrl, savedIds, onToggleSave, o
                         <ItemThumb src={thumbnails[item.id]} />
                         <span className="outfit-row-text">
                           <strong>{capitalise(item.type)}</strong>
-                          <small>{capitalise(item.description)}</small>
+                          <small>{capitalise(isRating ? item.reason || item.description : item.description)}</small>
                         </span>
                         <span className="outfit-row-price">
                           {item.pending ? (
