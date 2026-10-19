@@ -19,7 +19,7 @@ function statusMessage(seconds) {
   return "The free GPUs are busy, still working…";
 }
 
-function BeforeAfter({ before, after }) {
+export function BeforeAfter({ before, after }) {
   const [position, setPosition] = useState(50);
 
   return (

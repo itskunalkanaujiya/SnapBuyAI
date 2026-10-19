@@ -7,7 +7,7 @@ import ProductCard from "./components/ProductCard.jsx";
 import RecentSearches from "./components/RecentSearches.jsx";
 import TextSearchPanel, { SearchModeTabs } from "./components/TextSearchPanel.jsx";
 import TryOnDialog from "./components/TryOnDialog.jsx";
-import LiveTryOnDialog from "./components/LiveTryOnDialog.jsx";
+import AccessoryTryOnDialog from "./components/AccessoryTryOnDialog.jsx";
 import SearchQuota from "./components/SearchQuota.jsx";
 import OutfitView from "./components/OutfitView.jsx";
 import HeroHeadline from "./components/HeroHeadline.jsx";
@@ -976,7 +976,7 @@ export default function App() {
 
       {tryOnProduct &&
         (tryOnProduct.ar_category ? (
-          <LiveTryOnDialog product={tryOnProduct} onClose={closeTryOn} />
+          <AccessoryTryOnDialog product={tryOnProduct} onClose={closeTryOn} />
         ) : (
           <TryOnDialog product={tryOnProduct} onClose={closeTryOn} />
         ))}

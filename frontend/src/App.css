@@ -4275,177 +4275,33 @@ button.outfit-row:hover,
   opacity: 0;
 }
 
-/* ---------- Live try-on (sunglasses, watches) ---------- */
+/* ---------- Glasses and watch try-on (on a photo) ---------- */
 
-.live-modal {
-  width: min(720px, 100%);
-}
-
-.live-product {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.live-product img {
-  width: 56px;
-  height: 56px;
-  flex: none;
-  padding: 4px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: #ffffff;
-  object-fit: contain;
-}
-
-.live-product .tryon-garment-meta {
-  margin-top: 2px;
-}
-
-.live-stage {
-  position: relative;
+.accessory-adjust {
   display: grid;
-  overflow: hidden;
-  min-height: 240px;
-  border-radius: var(--radius-lg);
-  background: #0f101a;
-  place-items: center;
-}
-
-.live-stage:not(.is-empty) {
-  align-self: center;
-  max-width: 100%;
-  min-height: 0;
-}
-
-.live-stage.is-empty {
-  aspect-ratio: 4 / 3;
-  border: 1.5px dashed var(--border);
-  background: var(--surface-2);
-}
-
-.live-canvas {
-  display: block;
-  max-width: 100%;
-  max-height: 58vh;
-}
-
-.live-placeholder {
-  display: flex;
-  flex-direction: column;
   align-items: center;
-  padding: 24px;
-  color: var(--primary);
-  gap: 8px;
-  text-align: center;
-}
-
-.live-placeholder strong {
-  color: var(--text);
-  font-size: 14.5px;
-}
-
-.live-placeholder span:not(.spinner) {
-  color: var(--text-3);
-  font-size: 13px;
-}
-
-.live-placeholder .spinner {
-  width: 22px;
-  height: 22px;
-  border-width: 2.5px;
-}
-
-.live-hint {
-  position: absolute;
-  bottom: 14px;
-  left: 50%;
-  padding: 7px 14px;
-  border-radius: 999px;
-  background: rgba(15, 16, 26, 0.72);
-  color: #ffffff;
-  font-size: 13px;
-  font-weight: 550;
-  transform: translateX(-50%);
-  white-space: nowrap;
-}
-
-.live-badge {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  display: inline-flex;
-  align-items: center;
-  padding: 3px 10px;
-  border-radius: 999px;
-  background: rgba(15, 16, 26, 0.6);
-  color: #ffffff;
-  font-size: 11.5px;
-  font-weight: 650;
-  gap: 6px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.live-view-toggle {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  display: inline-flex;
-  padding: 3px;
-  border-radius: 999px;
-  background: rgba(15, 16, 26, 0.6);
-  gap: 2px;
-}
-
-.live-view-toggle button {
-  padding: 4px 11px;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.75);
-  font-size: 12px;
-  font-weight: 650;
-}
-
-.live-view-toggle button.is-active {
-  background: #ffffff;
-  color: #4632d4;
-}
-
-.live-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #ff4d5e;
-  animation: live-pulse 1.4s ease-in-out infinite;
-}
-
-@keyframes live-pulse {
-  50% {
-    opacity: 0.35;
-  }
-}
-
-.live-controls {
-  display: grid;
+  margin-top: 14px;
   gap: 10px 20px;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr auto;
 }
 
-.live-slider {
+.accessory-adjust label {
   display: grid;
   align-items: center;
   color: var(--text-2);
   font-size: 12.5px;
   font-weight: 650;
   gap: 10px;
-  grid-template-columns: 62px 1fr;
+  grid-template-columns: auto 1fr;
 }
 
-.live-slider input {
+.accessory-adjust input {
   width: 100%;
   accent-color: var(--primary);
+}
+
+.tryon-tip .spinner {
+  flex: none;
 }
 
 .alert-info {
@@ -4623,7 +4479,7 @@ button.outfit-row:hover,
     grid-template-columns: 1fr 1fr;
   }
 
-  .live-controls {
+  .accessory-adjust {
     grid-template-columns: 1fr;
   }
 
@@ -4648,12 +4504,6 @@ button.outfit-row:hover,
 
   .outfit-scroller {
     grid-auto-columns: 72%;
-  }
-
-  .live-hint {
-    max-width: calc(100% - 24px);
-    white-space: normal;
-    text-align: center;
   }
 
   .tryon-plus {

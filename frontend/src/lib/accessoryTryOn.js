@@ -1,8 +1,9 @@
 import { API_URL } from "./products.js";
 
-// Live try-on for sunglasses and watches: MediaPipe tracks the face or hand
-// in the browser and the product's cut-out photo is drawn on top. Nothing is
-// uploaded; the camera stream stays on the device.
+// Photo try-on for glasses and watches: MediaPipe finds the eyes or wrist in
+// the person's photo, in the browser, and the product's real photo (cut out
+// of its background by the backend) is drawn on top. The person's photo
+// isn't uploaded.
 
 // Keep in sync with the @mediapipe/tasks-vision version in package.json.
 const WASM_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm";
@@ -32,7 +33,6 @@ let running = 0;
 // Hand points: wrist, index / middle / pinky knuckles.
 const HAND = { wrist: 0, index: 5, middle: 9, pinky: 17 };
 
-const SMOOTHING = 0.45; // share of the new position used each frame
 const MAX_STRAP_RATIO = 2.4; // longest strap shown, relative to watch width
 
 /**
@@ -45,7 +45,35 @@ export function frameScale(pupilScale, faceScale) {
   return faceScale * ratio;
 }
 
-export function canTryOnLive(product) {
+// The person's photo is kept in this browser per kind of product (a face
+// for glasses, a wrist for watches) so it can be reused.
+const PHOTO_KEYS = { glasses: "snapbuy-ai-tryon-face", watch: "snapbuy-ai-tryon-wrist" };
+
+export function readAccessoryPhoto(category) {
+  try {
+    return localStorage.getItem(PHOTO_KEYS[category]) || "";
+  } catch {
+    return "";
+  }
+}
+
+export function saveAccessoryPhoto(category, dataUrl) {
+  try {
+    localStorage.setItem(PHOTO_KEYS[category], dataUrl);
+  } catch {
+    // Storage full or blocked: the photo still works for this visit.
+  }
+}
+
+export function forgetAccessoryPhoto(category) {
+  try {
+    localStorage.removeItem(PHOTO_KEYS[category]);
+  } catch {
+    // Nothing to forget.
+  }
+}
+
+export function canTryOnAccessory(product) {
   return Boolean(product?.ar_category && (product.tryon_image_url || product.image_url));
 }
 
@@ -121,7 +149,7 @@ export async function createTracker(category) {
     try {
       return await Task.createFromOptions(fileset, {
         baseOptions: { modelAssetPath: MODEL_URLS[category], delegate },
-        runningMode: "VIDEO",
+        runningMode: "IMAGE",
         ...extra,
       });
     } catch (error) {
@@ -131,9 +159,9 @@ export async function createTracker(category) {
   return null;
 }
 
-/** Landmarks of the first face or hand in a video frame or image. */
-export function detect(tracker, source, timestamp) {
-  const result = tracker.detectForVideo(source, timestamp);
+/** Landmarks of the first face or hand in a photo, or null. */
+export function detect(tracker, source) {
+  const result = tracker.detect(source);
   return (result.faceLandmarks || result.landmarks || [])[0] || null;
 }
 
@@ -200,28 +228,6 @@ export function placement(category, landmarks, width, height, mirror, { size, li
     width: Math.max(palmWidth, handLength * 0.55) * 0.9 * size,
     // Turn the photo so the strap runs along the arm.
     angle: Math.atan2(towardFingers.y, towardFingers.x) + Math.PI / 2,
-  };
-}
-
-function blendAngle(from, to) {
-  let delta = to - from;
-  while (delta > Math.PI) delta -= 2 * Math.PI;
-  while (delta < -Math.PI) delta += 2 * Math.PI;
-  return from + delta * SMOOTHING;
-}
-
-/** Ease towards the new placement to hide tracking jitter. */
-export function smooth(previous, next) {
-  if (!previous) return next;
-  return {
-    x: previous.x + (next.x - previous.x) * SMOOTHING,
-    y: previous.y + (next.y - previous.y) * SMOOTHING,
-    width: previous.width + (next.width - previous.width) * SMOOTHING,
-    faceWidth:
-      next.faceWidth && previous.faceWidth
-        ? previous.faceWidth + (next.faceWidth - previous.faceWidth) * SMOOTHING
-        : next.faceWidth,
-    angle: blendAngle(previous.angle, next.angle),
   };
 }
 

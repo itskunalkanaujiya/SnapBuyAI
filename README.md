@@ -18,25 +18,23 @@ try-on models on Hugging Face: [Leffa](https://huggingface.co/spaces/franciszzj/
 (non-commercial) as a fallback for tops. A try-on takes about 20–40 seconds
 on Hugging Face's free GPU quota.
 
-**Live try-on** works for sunglasses, glasses and watches ("Try live"). The
-browser opens the camera and tracks the face or hand with
+**Glasses and watch try-on** ("Try on" on sunglasses, glasses and watches)
+works on a photo, like the clothes try-on. The person uploads a photo of
+their face or wrist; in the browser,
 [MediaPipe](https://ai.google.dev/edge/mediapipe/solutions/vision/face_landmarker)
-(face and hand landmarks), and draws the product photo on top as you move:
-frames on the eyes, the watch on the wrist along the arm. The backend only
-removes the product photo's background (`/api/v1/tryon/overlay`); the camera
-feed never leaves the device. The default **3D view** (Three.js) shows the real product photo as a gently
-curved frame that turns and tilts with the tracked head (watches wrap around
-the wrist and tilt with it); a **Flat** view draws it in 2D. Glasses are
-sized from both the pupils and the width of the face, the cut-out's edges
-are cleaned of the white photo background, tinted lenses are slightly
-see-through and a soft shadow sits under the frame, so they look worn
-rather than pasted on. Glasses are placed by matching the lens
-centres in the product photo to the pupils (iris tracking). The web app checks
-each listing's photo in the background and shows "Try live" only when it is
+finds the eyes or the hand, and the product's real photo, cut out of its
+background by the backend (`/api/v1/tryon/overlay`), is placed on it: frames
+on the eyes, the watch on the wrist along the arm. The person's photo never
+leaves the device. Glasses are sized from both the pupils and the width of
+the face and placed by matching the lens centres in the product photo to the
+pupils; the cut-out's edges are cleaned of the white photo background,
+tinted lenses are slightly see-through and a soft shadow sits under the
+frame, so they look worn rather than pasted on. Size and position sliders
+fine-tune the fit, with a before/after slider and a download. The web app checks
+each listing's photo in the background and shows "Try on" only when it is
 usable: a plain background and, for glasses, a front view (both lenses found
 and alike, as clear-lens holes or tinted areas), so the frame on the face is
-always the real product photo. Users can also use a photo, adjust size and
-position, and save a picture.
+always the real product photo.
 
 **Rate my outfit.** Next to Find the outfit: the vision model scores the
 look out of 10, says what works, and suggests 2-3 new items to add or swap
@@ -154,7 +152,7 @@ frontend/                    React 19 + Vite app
   src/components/            Search panels, results, product cards, try-on dialogs
   src/lib/products.js        Price, filter and formatting helpers
   src/lib/tryon.js           Clothing try-on requests
-  src/lib/liveTryOn.js       Face/hand tracking and product placement
+  src/lib/accessoryTryOn.js  Face/hand detection and product placement
 ```
 
 ## Setup

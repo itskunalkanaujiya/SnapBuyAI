@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import Icon from "./Icon.jsx";
 import { canTryOn } from "../lib/tryon.js";
-import { canTryOnLive, loadOverlay } from "../lib/liveTryOn.js";
+import { canTryOnAccessory, loadOverlay } from "../lib/accessoryTryOn.js";
 import { usePalette } from "../lib/palette.js";
 import {
   AVAILABILITY_LABELS,
@@ -34,14 +34,15 @@ function StoreIcon({ product }) {
   );
 }
 
-// Live try-on only looks right with a clean product photo (a front view for
-// glasses), so the photo is checked before the button is shown.
-function useLiveReady(product, enabled) {
+// Glasses and watches are tried on by placing the product's own photo, which
+// only looks right with a clean photo (a front view for glasses), so the
+// photo is checked before the button is shown.
+function useAccessoryReady(product, enabled) {
   const [ready, setReady] = useState(false);
-  const live = enabled && canTryOnLive(product);
+  const accessory = enabled && canTryOnAccessory(product);
 
   useEffect(() => {
-    if (!live) return undefined;
+    if (!accessory) return undefined;
     let active = true;
     loadOverlay(product).then(
       () => active && setReady(true),
@@ -50,16 +51,16 @@ function useLiveReady(product, enabled) {
     return () => {
       active = false;
     };
-  }, [live, product]);
+  }, [accessory, product]);
 
-  return live && ready;
+  return accessory && ready;
 }
 
 const DEAL_ICONS = { high: "alert", fake: "alert", real: "check" };
 
 export default function ProductCard({ product, isSaved, onToggleSave, onTryOn, onCompleteLook, highlight, deal }) {
   const [imageFailed, setImageFailed] = useState(!product.image_url);
-  const liveReady = useLiveReady(product, Boolean(onTryOn));
+  const accessoryReady = useAccessoryReady(product, Boolean(onTryOn));
   const suits = usePalette()?.suitsYou(product);
 
   const match = getMatchLevel(product);
@@ -115,15 +116,15 @@ export default function ProductCard({ product, isSaved, onToggleSave, onTryOn, o
           )}
         </div>
 
-        {onTryOn && (liveReady || (!product.ar_category && canTryOn(product))) && (
+        {onTryOn && (accessoryReady || (!product.ar_category && canTryOn(product))) && (
           <button
             type="button"
             className="tryon-button"
             onClick={() => onTryOn(product)}
-            title={liveReady ? "Try it on live with your camera" : "See it on your photo"}
+            title="See it on your photo"
           >
-            <Icon name={liveReady ? "camera" : "shirt"} size={14} />
-            {liveReady ? "Try live" : "Try on"}
+            <Icon name="shirt" size={14} />
+            Try on
           </button>
         )}
 

@@ -48,11 +48,11 @@ const TABS = [
   },
   {
     key: "live",
-    icon: "camera",
-    label: "Live 3D try-on",
-    title: "Glasses and watches, live on camera.",
-    text: "Sunglasses sit on your face and watches on your wrist, following you in 3D as you move. Everything runs on your phone or laptop; nothing is uploaded.",
-    points: ["Follows your head and wrist in real time", "Real product photos, adjustable fit", "Save a picture to share"],
+    icon: "sparkles",
+    label: "Glasses & watch try-on",
+    title: "Glasses and watches, on your own photo.",
+    text: "Upload a photo of your face or wrist and the real frames or watch are placed right on it, sized to you. It's made in your browser; your photo isn't uploaded.",
+    points: ["The actual product photo, not a lookalike", "Size and position sliders, before / after", "Download the picture to share"],
     cta: "Try on sunglasses",
     example: "Aviator sunglasses for men",
   },
@@ -248,9 +248,7 @@ function LiveDemo() {
   return (
     <div className="demo demo-live">
       <div className="demo-camera">
-        <span className="demo-live-badge">
-          <span className="live-dot" /> Live
-        </span>
+        <span className="demo-live-badge">Your photo</span>
         <svg className="demo-head" viewBox="0 0 160 160" aria-hidden="true">
           <g className="demo-head-move">
             <ellipse cx="80" cy="84" rx="40" ry="48" fill="#e2b48c" />
@@ -270,8 +268,8 @@ function LiveDemo() {
       <div className="demo-tryon-caption">
         <span className="demo-swatch demo-swatch-glasses" />
         <span className="demo-row-text">
-          <strong>Aviator sunglasses · 3D</strong>
-          <small>Follows your head as you move</small>
+          <strong>Aviator sunglasses</strong>
+          <small>Placed on your eyes, sized to your face</small>
         </span>
       </div>
     </div>

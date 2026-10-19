@@ -71,7 +71,7 @@ const FAQS = [
   {
     question: "Can I try on sunglasses and watches?",
     answer:
-      "Yes, live. Tap \"Try live\" on sunglasses, glasses or a watch and SnapBuy opens your camera: the frames follow your face in 3D — turning with your head, arms running back to your ears — and the watch wraps around your wrist as you move. You can also use a photo, adjust the size and position, and save a picture. It runs entirely on your device — the camera feed is never uploaded.",
+      "Yes. Tap \"Try on\" on glasses, sunglasses or a watch and upload a photo of your face or wrist: SnapBuy places the product's real photo on your eyes or wrist, so you see the actual design. Adjust the size and position, compare before and after, and download the picture. It's made in your browser; your photo isn't uploaded.",
   },
   {
     question: "Can SnapBuy find a whole outfit from one photo?",
