@@ -79,6 +79,16 @@ const FAQS = [
       "Yes. Upload a photo of someone and tap \"Find the outfit\". AI identifies each item they're wearing (top, trousers, shoes, watch, glasses, bag and more) and SnapBuy shows shopping options for every item separately, usually in a few seconds. Clothing in the results can be tried on too.",
   },
   {
+    question: "Can I search in Hindi or by voice?",
+    answer:
+      "Yes. Type or speak in English, Hindi or Hinglish, like \"50k ke andar 8GB RAM wala laptop\". Tap the microphone in the text search and pick English or हिंदी. Voice search uses your browser's speech recognition.",
+  },
+  {
+    question: "What are “Cheaper lookalikes” and deal scores?",
+    answer:
+      "After a photo search, SnapBuy shows dupes: listings that look very similar to the closest matches but cost much less, with how much you'd save. Every result also gets a deal score, like \"Great deal · 30% below typical\", comparing its price with the typical price of everything found.",
+  },
+  {
     question: "Which stores does it search?",
     answer:
       "Any online store Google Lens finds — often Amazon, Flipkart, Myntra, AJIO, Meesho and Tata CLiQ, plus many smaller shops. Results are tuned for India.",

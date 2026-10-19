@@ -4,6 +4,7 @@ import { canTryOn } from "../lib/tryon.js";
 import { canTryOnLive, loadOverlay } from "../lib/liveTryOn.js";
 import {
   AVAILABILITY_LABELS,
+  formatAmount,
   formatPrice,
   getAvailability,
   getMatchLevel,
@@ -53,7 +54,7 @@ function useLiveReady(product, enabled) {
   return live && ready;
 }
 
-export default function ProductCard({ product, isSaved, onToggleSave, onTryOn, highlight }) {
+export default function ProductCard({ product, isSaved, onToggleSave, onTryOn, highlight, deal }) {
   const [imageFailed, setImageFailed] = useState(!product.image_url);
   const liveReady = useLiveReady(product, Boolean(onTryOn));
 
@@ -174,6 +175,24 @@ export default function ProductCard({ product, isSaved, onToggleSave, onTryOn, h
             </span>
           )}
         </div>
+
+        {product.dupe_savings > 0 ? (
+          <p className="deal deal-dupe" title={`The closest matches cost about ${formatAmount(product.dupe_reference_price)}`}>
+            <Icon name="trendDown" size={13} />
+            <span>
+              <strong>Save {formatAmount(product.dupe_savings)}</strong>
+              {product.visual_similarity_score != null &&
+                ` · looks ${Math.round(product.visual_similarity_score * 100)}% similar`}
+            </span>
+          </p>
+        ) : deal ? (
+          <p className={`deal deal-${deal.tone}`} title={deal.title}>
+            <Icon name={deal.tone === "high" ? "alert" : "tag"} size={13} />
+            <span>
+              <strong>{deal.label}</strong> · {deal.detail}
+            </span>
+          </p>
+        ) : null}
 
         {product.product_url ? (
           <a

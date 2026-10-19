@@ -70,6 +70,7 @@ function toResults(data, kind = "photo") {
     understood: Array.isArray(data.understood) ? data.understood : null,
     bestMatches: Array.isArray(data.best_matches) ? data.best_matches : [],
     cheapest: Array.isArray(data.cheapest_alternatives) ? data.cheapest_alternatives : [],
+    dupes: Array.isArray(data.dupes) ? data.dupes : [],
   };
 }
 
@@ -701,6 +702,7 @@ export default function App() {
                 query={results.query}
                 understood={results.understood}
                 bestMatches={results.bestMatches}
+                dupes={results.dupes}
                 cheapest={results.cheapest}
                 filters={filters}
                 onFiltersChange={setFilters}

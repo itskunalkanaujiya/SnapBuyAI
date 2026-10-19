@@ -543,6 +543,8 @@ def build_search_response(online_results: dict) -> dict:
         "online_search_query": query,
         # Text search: what a natural-language request was understood as.
         "understood": online_results.get("understood"),
+        # Photo search: cheaper lookalikes of the closest matches.
+        "dupes": online_results.get("dupes") or [],
         "note": (
             "Best Matches are ranked by visual similarity and text relevance. "
             "Cheapest Alternatives are sorted by known numeric price. "

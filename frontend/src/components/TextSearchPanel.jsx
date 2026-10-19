@@ -1,8 +1,10 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import Icon from "./Icon.jsx";
+import { VOICE_LANGUAGES, useVoiceSearch, voiceSupported } from "../lib/voice.js";
 
 const EXAMPLES = [
   "HP laptop with 8GB RAM and 512GB SSD under 50k",
+  "50k ke andar 8GB RAM wala laptop",
   "Samsung 5G phone with 6000mAh battery under 20000",
   "Casio G-Shock green watch",
   "Nike running shoes for men",
@@ -46,6 +48,13 @@ export default function TextSearchPanel({
 }) {
   const inputRef = useRef(null);
   const trimmed = query.trim();
+  const [language, setLanguage] = useState(VOICE_LANGUAGES[0].code);
+  const canSpeak = voiceSupported();
+  const voice = useVoiceSearch((text, isFinal) => {
+    onQueryChange(text);
+    // Search as soon as the sentence is finished.
+    if (isFinal && text.trim().length >= 2) onSearch(text.trim());
+  });
 
   return (
     <div className="panel search-panel">
@@ -72,10 +81,21 @@ export default function TextSearchPanel({
             value={query}
             maxLength={150}
             onChange={(event) => onQueryChange(event.target.value)}
-            placeholder="e.g. HP laptop with 8GB RAM under 50k"
+            placeholder={voice.listening ? "Listening… speak now" : "e.g. HP laptop with 8GB RAM under 50k"}
             aria-label="What are you looking for?"
             disabled={isSearching}
           />
+          {canSpeak && !isSearching && (
+            <button
+              type="button"
+              className={`icon-button voice-button ${voice.listening ? "is-listening" : ""}`}
+              onClick={() => (voice.listening ? voice.stop() : voice.start(language))}
+              aria-label={voice.listening ? "Stop listening" : "Search by voice"}
+              title="Search by voice (English or Hindi)"
+            >
+              <Icon name="mic" size={17} />
+            </button>
+          )}
           {query && !isSearching && (
             <button
               type="button"
@@ -90,6 +110,30 @@ export default function TextSearchPanel({
             </button>
           )}
         </label>
+
+        {canSpeak && (
+          <div className="voice-row">
+            <span className="voice-hint">
+              <Icon name="mic" size={13} />
+              {voice.listening ? "Listening…" : "Speak in"}
+            </span>
+            <div className="voice-languages" role="group" aria-label="Voice language">
+              {VOICE_LANGUAGES.map((option) => (
+                <button
+                  key={option.code}
+                  type="button"
+                  className={language === option.code ? "is-active" : ""}
+                  aria-pressed={language === option.code}
+                  onClick={() => setLanguage(option.code)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <span className="voice-note">Hindi and Hinglish work too</span>
+          </div>
+        )}
+        {voice.error && <p className="voice-error">{voice.error}</p>}
 
         <div className="text-examples">
           <span>Try:</span>

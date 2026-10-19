@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import Icon from "./Icon.jsx";
 import { formatTimeAgo } from "../lib/history.js";
 import ProductCard, { ProductCardSkeleton } from "./ProductCard.jsx";
+import { computeDeals } from "../lib/deals.js";
 import {
   DEFAULT_FILTERS,
   applyFilters,
@@ -94,11 +95,11 @@ function Toolbar({ filters, onChange, stores, shownCount, totalCount, hasMatchSc
   );
 }
 
-function Section({ icon, title, subtitle, products, savedIds, onToggleSave, onTryOn, highlightFirst }) {
+function Section({ icon, title, subtitle, products, savedIds, onToggleSave, onTryOn, highlightFirst, deals, className = "" }) {
   if (!products.length) return null;
 
   return (
-    <section className="result-section">
+    <section className={`result-section ${className}`}>
       <header className="section-header">
         <span className="section-icon">
           <Icon name={icon} size={18} />
@@ -119,6 +120,7 @@ function Section({ icon, title, subtitle, products, savedIds, onToggleSave, onTr
             onToggleSave={onToggleSave}
             onTryOn={onTryOn}
             highlight={highlightFirst && index === 0 ? highlightFirst : null}
+            deal={deals?.get(getProductId(product))}
           />
         ))}
       </div>
@@ -209,6 +211,7 @@ export default function ResultsView({
   understood,
   bestMatches,
   cheapest,
+  dupes = [],
   filters,
   onFiltersChange,
   savedIds,
@@ -248,6 +251,10 @@ export default function ResultsView({
       hasMatchScores: allProducts.some((product) => product.visual_similarity_score != null),
     };
   }, [allProducts]);
+
+  // Deal score compares each price with the typical price of this search.
+  const deals = useMemo(() => computeDeals(allProducts), [allProducts]);
+  const filteredDupes = useMemo(() => applyFilters(dupes, filters), [dupes, filters]);
 
   const filteredBest = useMemo(() => applyFilters(bestMatches, filters), [bestMatches, filters]);
   const filteredCheapest = useMemo(() => applyFilters(cheapest, filters), [cheapest, filters]);
@@ -369,6 +376,17 @@ export default function ResultsView({
             savedIds={savedIds}
             onToggleSave={onToggleSave}
             onTryOn={onTryOn}
+            deals={deals}
+          />
+          <Section
+            className="dupes-section"
+            icon="sparkles"
+            title="Cheaper lookalikes"
+            subtitle="Dupes: listings that look like the closest matches but cost much less."
+            products={filteredDupes}
+            savedIds={savedIds}
+            onToggleSave={onToggleSave}
+            onTryOn={onTryOn}
           />
           <Section
             icon="tag"
@@ -382,6 +400,7 @@ export default function ResultsView({
             savedIds={savedIds}
             onToggleSave={onToggleSave}
             onTryOn={onTryOn}
+            deals={deals}
             highlightFirst={showBestPrice ? "Best price" : null}
           />
         </>

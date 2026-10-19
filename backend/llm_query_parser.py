@@ -79,7 +79,8 @@ Rules:
 - Only fill a spec when the customer states it or clearly implies a number. Never invent numbers.
 - "good for gaming" -> features ["gaming"]; "long battery" -> features ["long battery"]; do not turn these into numbers.
 - Describe what they want to buy, not what they will do with it: "something to keep tea hot" -> product "insulated flask".
-- Keep the brand exactly as the customer wrote it, in lower case."""
+- Keep the brand exactly as the customer wrote it, in lower case.
+- Requests may be in Hindi (Devanagari), Hinglish ("8gb ram wala laptop 50k ke andar") or English. Always answer in English: "ke andar"/"se kam"/"tak" means max_price, "se upar"/"se zyada" means min_price, "ladkon ke liye" means audience "boys", "mummy ke liye" means "women"."""
 
 
 # Wishes that are really specs ("ssd", "8gb ram") are dropped.
@@ -95,6 +96,9 @@ def llm_available():
 
 def looks_like_sentence(query):
     """True for requests worth sending to the model, not plain keywords."""
+    # Hindi in Devanagari (or any non-Latin script) always needs the model.
+    if re.search(r"[^\x00-\x7f₹–—’“”]", query or ""):
+        return True
     words = re.findall(r"[a-z0-9]+", (query or "").lower())
     if len(words) >= 6:
         return True

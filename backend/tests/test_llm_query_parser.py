@@ -145,3 +145,9 @@ def test_spec_words_are_not_wishes(monkeypatch):
     }))
     parsed = llm.understand_query("an hp laptop with 8gb ram and 512gb ssd under 50k")
     assert parsed.wishes == ["thin and light"]
+
+
+def test_hindi_script_always_uses_the_model():
+    assert llm.looks_like_sentence("लैपटॉप")
+    assert llm.looks_like_sentence("mujhe laptop chahiye")
+    assert not llm.looks_like_sentence("boat airdopes")

@@ -83,3 +83,27 @@ def test_text_search_ranks_by_requirements_and_keeps_the_budget(monkeypatch):
     assert names[:2] == ["HP 15s Laptop (8GB RAM, 512GB SSD)", "HP 255 G10 Laptop 8GB RAM 512GB"]
     assert "HP Pavilion Laptop 16GB RAM 1TB SSD" not in names  # over budget
     assert result["understood"] == ["HP", "Laptop", "8 GB RAM", "500 GB storage", "Under ₹50,000"]
+
+
+@pytest.mark.parametrize(
+    "text, low, high, audience",
+    [
+        ("mujhe ek 8gb ram wala hp laptop chahiye 50k ke andar", None, 50000, None),
+        ("20000 se kam samsung phone", None, 20000, None),
+        ("10k se upar wali watch", 10000, None, None),
+        ("ladkon ke liye running shoes 2000 tak", None, 2000, "boys"),
+        ("mummy ke liye cotton saree", None, None, "women"),
+    ],
+)
+def test_hinglish_requests(text, low, high, audience):
+    parsed = q.parse_query(text)
+    assert (parsed.min_price, parsed.max_price) == (low, high)
+    assert parsed.audience == audience
+    for filler in ("mujhe", "wala", "chahiye", "ke", "liye"):
+        assert filler not in parsed.product.split()
+
+
+def test_hinglish_laptop_keeps_specs_and_brand():
+    parsed = q.parse_query("mujhe ek 8gb ram wala hp laptop chahiye 50k ke andar")
+    assert parsed.brand == "hp" and parsed.product == "laptop"
+    assert {spec.kind: spec.value for spec in parsed.specs} == {"ram": 8}

@@ -179,3 +179,42 @@ def test_foreign_listings_dont_crowd_out_indian_ones(monkeypatch, tmp_path):
 
     result = s.search_products_by_image(tmp_path / "photo.jpg")
     assert [p["name"] for p in result["best_matches"]] == ["Cotton Shirt"]
+
+
+
+def dupe_item(name, price, similarity):
+    item = {
+        "title": name, "source": "Myntra", "link": f"https://www.myntra.com/p/{name}",
+        "price": {"value": f"₹{price}", "extracted_value": price, "currency": "₹"},
+        "in_stock": True, "_visual_similarity_score": similarity,
+    }
+    item["_offer"] = s.resolve_offer(item)
+    return item
+
+
+def test_find_dupes_picks_cheap_lookalikes():
+    kept = [
+        dupe_item("original-a", 4000, 0.95),
+        dupe_item("original-b", 3800, 0.93),
+        dupe_item("original-c", 4200, 0.92),
+        dupe_item("lookalike", 1200, 0.86),  # similar and 70% cheaper
+        dupe_item("cheap-but-different", 500, 0.62),  # not similar enough
+        dupe_item("similar-not-cheap", 3500, 0.88),  # not cheap enough
+        dupe_item("another-lookalike", 900, 0.81),
+    ]
+
+    dupes = s.find_dupes(kept)
+
+    assert [(item["title"], reference) for item, reference in dupes] == [
+        ("another-lookalike", 4000),
+        ("lookalike", 4000),
+    ]
+
+
+def test_select_sections_reports_dupes_with_savings():
+    kept = [dupe_item(f"original-{i}", 3000, 0.95 - i / 100) for i in range(3)] + [dupe_item("lookalike", 999, 0.85)]
+    sections = s.select_sections(kept, max_results=10)
+    assert [d["name"] for d in sections["dupes"]] == ["lookalike"]
+    assert sections["dupes"][0]["dupe_savings"] == 2001
+
+    assert s.select_sections(kept, max_results=10, preview=True)["dupes"] == []

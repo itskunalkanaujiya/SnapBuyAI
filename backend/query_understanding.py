@@ -31,6 +31,12 @@ KNOWN_BRANDS = {
 
 # Words that only carry the sentence ("i want a ... with ...").
 FILLER_WORDS = {
+    # Hinglish: "mujhe ek 8gb ram wala laptop chahiye".
+    "mujhe", "muje", "hame", "humein", "chahiye", "chaiye", "chahie", "wala",
+    "wali", "wale", "waala", "waali", "ek", "ka", "ki", "ke", "ko", "aur",
+    "liye", "dikhao", "dikha", "batao", "do", "hai", "hain", "jo", "jisme",
+    "mein", "me", "se", "andar", "tak", "kam", "acha", "accha", "achha",
+    "badhiya", "sasta", "saste", "sasti", "koi", "kuch", "bhi",
     "i", "want", "need", "looking", "look", "for", "show", "me", "find", "get",
     "buy", "a", "an", "the", "of", "with", "and", "having", "has", "have",
     "that", "which", "is", "are", "to", "in", "on", "my", "please", "some",
@@ -51,6 +57,11 @@ AUDIENCE = {
     "ladies": "women", "lady": "women", "female": "women", "girls": "girls",
     "girl": "girls", "kids": "kids", "kid": "kids", "children": "kids",
     "unisex": "unisex",
+    # Hinglish
+    "ladke": "boys", "ladkon": "boys", "ladka": "boys", "ladkiyon": "girls",
+    "ladki": "girls", "bacchon": "kids", "bachchon": "kids", "bache": "kids",
+    "bachche": "kids", "mummy": "women", "mom": "women", "maa": "women",
+    "papa": "men", "dad": "men", "aadmi": "men", "aurat": "women",
 }
 COLOURS = {
     "black", "white", "blue", "navy", "green", "red", "maroon", "pink",
@@ -218,6 +229,10 @@ def parse_query(raw):
         (rf"\b(?:under|below|within|upto|up\s+to|less\s+than|max(?:imum)?|budget(?:\s+of)?|not\s+more\s+than)\s+{MONEY}", "max"),
         (rf"\b(?:above|over|more\s+than|min(?:imum)?|at\s*least|atleast|starting(?:\s+from)?)\s+{MONEY}", "min"),
         (rf"\b(?:around|about|approx(?:imately)?|near)\s+{MONEY}", "around"),
+        # Hinglish: "50k ke andar", "20000 se kam", "30k tak", "10k se upar".
+        (rf"\b{MONEY}\s*(?:ke\s+andar|ke\s+under|se\s+kam|tak|ke\s+ne+che|ke\s+niche|max)\b", "max"),
+        (rf"\b{MONEY}\s*(?:se\s+(?:upar|zyada|jyada|adhik))\b", "min"),
+        (rf"\b{MONEY}\s*(?:ke\s+aas\s*pass|ke\s+aaspaas|ke\s+around)\b", "around"),
     ]
     for pattern, kind in budget_patterns:
         match = re.search(pattern, text)

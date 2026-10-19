@@ -1304,6 +1304,43 @@ def build_product(item, pending=False):
     }
 
 
+# Dupe finder: listings that look like the closest matches (CLIP "Similar"
+# or better) but cost much less than them.
+DUPE_MIN_SIMILARITY = 0.78
+DUPE_MAX_PRICE_SHARE = 0.7  # at most 70% of the closest matches' price
+DUPE_REFERENCE_COUNT = 3  # closest priced matches that set the reference price
+MAX_DUPES = 6
+
+
+def find_dupes(kept):
+    """
+    Cheaper lookalikes among the kept listings: [(item, reference_price)],
+    biggest saving first. The reference is the median price of the most
+    visually similar priced listings (usually the original product).
+    """
+    priced = [
+        item for item in kept
+        if item["_offer"]["price"] is not None
+        and item["_offer"]["currency"] == "INR"
+        and item.get("_visual_similarity_score") is not None
+    ]
+    if len(priced) < DUPE_REFERENCE_COUNT + 1:
+        return []
+
+    by_similarity = sorted(priced, key=lambda item: -item["_visual_similarity_score"])
+    reference_prices = sorted(item["_offer"]["price"] for item in by_similarity[:DUPE_REFERENCE_COUNT])
+    reference = reference_prices[len(reference_prices) // 2]
+
+    dupes = [
+        item for item in by_similarity[DUPE_REFERENCE_COUNT:]
+        if item["_visual_similarity_score"] >= DUPE_MIN_SIMILARITY
+        and item["_offer"]["price"] <= reference * DUPE_MAX_PRICE_SHARE
+        and item["_offer"]["availability"] != OUT_OF_STOCK
+    ]
+    dupes.sort(key=lambda item: item["_offer"]["price"])
+    return [(item, reference) for item in dupes[:MAX_DUPES]]
+
+
 def select_sections(candidates, max_results, preview=False):
     """
     Resolve offers, filter, and pick the Best Matches and Cheapest
@@ -1347,11 +1384,20 @@ def select_sections(candidates, max_results, preview=False):
         )
     )
 
+    dupes = []
+    if not preview:
+        for item, reference in find_dupes(kept):
+            dupe = product(item)
+            dupe["dupe_reference_price"] = reference
+            dupe["dupe_savings"] = round(reference - item["_offer"]["price"], 2)
+            dupes.append(dupe)
+
     return {
         "best_matches": [product(item) for item in best_items],
         "cheapest_alternatives": [
             product(item) for item in alternative_items[:max_results]
         ],
+        "dupes": dupes,
         "filtered_count": len(candidates) - len(kept),
     }
 
@@ -1767,6 +1813,7 @@ def search_products_by_image(
     return {
         "best_matches": best_matches,
         "cheapest_alternatives": cheapest_alternatives,
+        "dupes": sections["dupes"],
         "online_count": len(best_matches) + len(cheapest_alternatives),
         "online_search_query": query,
     }

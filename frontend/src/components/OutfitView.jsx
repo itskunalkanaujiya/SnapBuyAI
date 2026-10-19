@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import Icon from "./Icon.jsx";
 import ProductCard, { ProductCardSkeleton } from "./ProductCard.jsx";
 import { formatAmount, getNumericPrice, getProductId } from "../lib/products.js";
+import { computeDeals } from "../lib/deals.js";
 
 const THUMBNAIL_SIZE = 160;
 const BOX_PADDING = 0.15; // share of the box added on each side
@@ -140,6 +141,7 @@ function OutfitPhoto({ photoUrl, items, activeId, onActivate, scanning }) {
 function ItemSection({ item, index, thumbnail, savedIds, onToggleSave, onTryOn, onMore }) {
   const products = itemProducts(item);
   const lowest = lowestPrice(item);
+  const deals = computeDeals(products);
 
   return (
     <section className="outfit-section" id={`outfit-${item.id}`}>
@@ -182,6 +184,7 @@ function ItemSection({ item, index, thumbnail, savedIds, onToggleSave, onTryOn, 
               onToggleSave={onToggleSave}
               onTryOn={onTryOn}
               highlight={getNumericPrice(product) === lowest && lowest !== null ? "Lowest" : null}
+              deal={deals.get(getProductId(product))}
             />
           ))}
         </div>

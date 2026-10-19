@@ -38,6 +38,14 @@ and alike, as clear-lens holes or tinted areas), so the frame on the face is
 always the real product photo. Users can also use a photo, adjust size and
 position, and save a picture.
 
+**Deal score, dupes and Hinglish voice search.** Every result shows how its
+price compares with the typical (median) price of that search ("Great deal ·
+30% below typical"). Photo searches add **Cheaper lookalikes**: listings at
+least "Similar" to the photo (CLIP ≥ 0.78) costing at most 70% of the
+closest matches, with the saving shown. Text search accepts Hindi and
+Hinglish ("50k ke andar 8GB RAM wala laptop"), typed or spoken through the
+browser's speech recognition (English or Hindi).
+
 **Find the outfit.** For a photo of a person, a vision model on Groq
 (Qwen3.8 27B, free tier; `backend/outfit_service.py`) lists everything they
 wear, each with a short shopping description and an approximate box, in

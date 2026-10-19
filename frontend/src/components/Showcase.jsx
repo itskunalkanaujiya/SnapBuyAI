@@ -14,7 +14,7 @@ const TABS = [
     label: "Photo search",
     title: "Snap it. We'll find where it's cheapest.",
     text: "Upload or paste any product photo. Google Lens recognises it, an AI image model ranks every listing by how closely it matches, and prices and stock are checked at each store.",
-    points: ["Works with screenshots and camera photos", "Closest matches first, lowest prices alongside", "Results start appearing in seconds"],
+    points: ["Closest matches first, lowest prices alongside", "Cheaper lookalikes (dupes) with how much you save", "Deal score on every price"],
     cta: "Upload a photo",
   },
   {
@@ -23,7 +23,7 @@ const TABS = [
     label: "Smart search",
     title: "Describe it the way you'd say it.",
     text: "Type a whole sentence: brand, specs, budget. AI understands what you mean and ranks listings by how many of your requirements they meet.",
-    points: ["“under 50k”, “8GB RAM”, “for my mom” all understood", "Budgets are strict, specs are checked", "Plain keywords work too"],
+    points: ["“under 50k”, “8GB RAM”, “for my mom” all understood", "Hindi and Hinglish, typed or spoken", "Budgets are strict, specs are checked"],
     cta: "Try “HP laptop, 8GB RAM, under 50k”",
     example: "HP laptop with 8GB RAM and 512GB SSD under 50k",
   },
