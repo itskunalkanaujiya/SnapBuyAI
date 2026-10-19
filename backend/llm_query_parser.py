@@ -105,12 +105,12 @@ def looks_like_sentence(query):
     return len(words) >= 3 and any(word in FILLER_WORDS for word in words)
 
 
-def chat_json(messages, max_tokens=600, timeout=TIMEOUT_SECONDS, temperature=0):
+def chat_json(messages, max_tokens=600, timeout=TIMEOUT_SECONDS, temperature=0, models=None):
     """
-    Send a chat to the first available Groq model and return its JSON reply
-    as a dict. Raises on any failure.
+    Send a chat to the first available Groq model (of models, default
+    GROQ_MODELS) and return its JSON reply as a dict. Raises on any failure.
     """
-    for model in GROQ_MODELS:
+    for model in models or GROQ_MODELS:
         if model in _retired_models:
             continue
         body = {

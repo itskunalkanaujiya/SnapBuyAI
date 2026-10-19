@@ -922,6 +922,7 @@ async def find_outfit_stream(request: Request, file: UploadFile = File(...)):
 
 class LookRequest(BaseModel):
     name: str
+    price: float | None = None
 
 
 @app.post("/api/v1/look/stream")
@@ -944,7 +945,7 @@ async def complete_the_look_stream(request: Request, body: LookRequest):
         cache_key,
         cached,
         first_stage="styling",
-        run=lambda emit: complete_the_look(name, on_event=emit),
+        run=lambda emit: complete_the_look(name, on_event=emit, product_price=body.price),
         shape=lambda look: look,
     )
 
@@ -989,15 +990,21 @@ _style_log = {}
 
 
 @app.post("/api/v1/style/rate/stream")
-async def rate_outfit_stream(request: Request, file: UploadFile = File(...)):
+async def rate_outfit_stream(
+    request: Request,
+    file: UploadFile = File(...),
+    colours: str | None = Form(default=None),
+):
     """
     Rate the outfit in a photo and shop the suggested changes, streamed:
-    "stage", "rating" (score, verdict, occasion, strengths), "items", one
-    "item" per suggestion, then "final" (or "error").
+    "stage", "rating" (score, rubric scores, verdict, occasion, strengths),
+    "items", one "item" per suggestion, then "final" (or "error").
+    colours: optional comma-separated best colours to prefer in the fixes.
     """
     image = await read_uploaded_image(file)
     fingerprint = await run_in_threadpool(image_fingerprint, image)
-    cache_key = f"rate:{fingerprint}"
+    palette = [c.strip() for c in (colours or "").split(",") if c.strip()][:10]
+    cache_key = f"rate:{fingerprint}:{','.join(palette).lower()}"
 
     cached = get_cached_search(cache_key)
     if cached is None:
@@ -1007,7 +1014,7 @@ async def rate_outfit_stream(request: Request, file: UploadFile = File(...)):
         cache_key,
         cached,
         first_stage="rating",
-        run=lambda emit: rate_outfit(image, on_event=emit),
+        run=lambda emit: rate_outfit(image, on_event=emit, colours=palette),
         shape=lambda rated: rated,
     )
 

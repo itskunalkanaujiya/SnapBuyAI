@@ -31,6 +31,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
 from PIL import Image, ImageOps
 
+from listing_judge import judge_listings
 from llm_query_parser import GROQ_URL, chat_json
 from image_shopping_service import compute_visual_similarity_scores, download_thumbnails, load_clip_model
 from text_shopping_service import search_products_by_text
@@ -123,7 +124,8 @@ Return JSON only:
     {
       "type": short category, e.g. "chinos", "loafers", "leather belt", "laptop bag",
       "description": a 3-8 word shopping search with colour, style and material that matches the product, e.g. "tan leather slip-on loafers",
-      "reason": under 12 words on why it goes well, e.g. "Tan leather keeps the navy shirt smart but relaxed"
+      "reason": under 12 words on why it goes well, e.g. "Tan leather keeps the navy shirt smart but relaxed",
+      "price_range": [lowest, highest] sensible price in rupees for this item at the same price level as the product, e.g. [800, 2500]
     }
   ]
 }
@@ -413,10 +415,23 @@ def rank_by_look(crop, result):
     return best, cheapest
 
 
-def shop_items(items, gender, emit, image=None):
+def judged_sections(item, result, gender):
+    """A suggested item's listings checked by the judge: (best_matches, cheapest)."""
+    picked = judge_listings(item, unique_listings(result), gender)
+    best = picked[:RESULTS_PER_ITEM]
+    shown = {id(p) for p in best}
+    cheapest = sorted(
+        (p for p in picked if id(p) not in shown and p.get("price") is not None),
+        key=lambda p: p["price"],
+    )[:CHEAPER_PER_ITEM]
+    return best, cheapest
+
+
+def shop_items(items, gender, emit, image=None, judge=False):
     """
     Search every item in parallel, adding its results; emits "item" each.
-    With the photo, each item's listings are re-ranked against its crop.
+    With the photo, each item's listings are re-ranked against its crop;
+    with judge, suggested items' listings are checked by a language model.
     """
     for item in items:
         item["query"] = item_query(item, gender)
@@ -426,12 +441,14 @@ def shop_items(items, gender, emit, image=None):
         try:
             crop = crop_item(image, item.get("box"))
             # The description is already a clean search; skip the text model.
-            if crop is not None:
+            if crop is not None or judge:
                 result = search_products_by_text(
                     item["query"], SEARCH_POOL, understand=False, min_relevance=LOOSE_RELEVANCE
                 )
             else:
                 result = search_products_by_text(item["query"], RESULTS_PER_ITEM, understand=False)
+            if crop is None and judge:
+                return item, judged_sections(item, result, gender), None
             return item, rank_by_look(crop, result), None
         except Exception as exc:
             print(f"Outfit item search failed for {item['query']!r}: {exc}")
@@ -466,7 +483,18 @@ def find_outfit(image, on_event=None):
     return result
 
 
-def suggest_look(product_name):
+def price_range(value):
+    """A model's [low, high] rupee range, or None if unusable."""
+    if not isinstance(value, (list, tuple)) or len(value) != 2:
+        return None
+    try:
+        low, high = sorted(float(v) for v in value)
+    except (TypeError, ValueError):
+        return None
+    return [round(low), round(high)] if high > 0 else None
+
+
+def suggest_look(product_name, product_price=None):
     """
     The items that go with a product: {"gender", "items": [{"id", "type",
     "description", "reason", "box": None}]}. Raises OutfitError.
@@ -478,7 +506,9 @@ def suggest_look(product_name):
         data = chat_json(
             [
                 {"role": "system", "content": LOOK_PROMPT},
-                {"role": "user", "content": f"Product: {product_name}"},
+                {"role": "user", "content": f"Product: {product_name}" + (
+                    f" (₹{product_price:,.0f})" if product_price else ""
+                )},
             ],
             max_tokens=700,
             timeout=LOOK_TIMEOUT_SECONDS,
@@ -512,6 +542,7 @@ def suggest_look(product_name):
             "type": item_type,
             "description": description,
             "reason": _clean(raw.get("reason"), 100),
+            "price_range": price_range(raw.get("price_range")),
             "box": None,
         })
         if len(items) == LOOK_ITEMS:
@@ -520,9 +551,9 @@ def suggest_look(product_name):
     return {"gender": gender if gender in GENDERS else "unisex", "items": items}
 
 
-def complete_the_look(product_name, on_event=None):
+def complete_the_look(product_name, on_event=None, product_price=None):
     """Suggest what goes with a product, then search each item in parallel."""
-    look = suggest_look(product_name)
+    look = suggest_look(product_name, product_price)
     if not look["items"]:
         raise OutfitError("Couldn't find items to go with this product.")
-    return shop_items(look["items"], look["gender"], _emitter(on_event))
+    return shop_items(look["items"], look["gender"], _emitter(on_event), judge=True)

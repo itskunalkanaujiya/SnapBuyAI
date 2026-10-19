@@ -35,6 +35,7 @@ import {
   ALLOWED_IMAGE_TYPES,
   DEFAULT_FILTERS,
   MAX_IMAGE_SIZE,
+  getNumericPrice,
   getProductId,
 } from "./lib/products.js";
 
@@ -509,7 +510,12 @@ export default function App() {
     setReturnTo(null);
     await streamItems(
       { kind: "rating", rating: null, gender: "", items: [], photoUrl: URL.createObjectURL(file) },
-      async (onEvent) => streamRating(await prepareForUpload(file), onEvent),
+      async (onEvent) =>
+        streamRating(
+          await prepareForUpload(file),
+          onEvent,
+          palette?.best.map((colour) => colour.name)
+        ),
       "Couldn't rate this outfit. Please try again."
     );
   }
@@ -529,7 +535,7 @@ export default function App() {
     setView("discover");
     await streamItems(
       { kind: "look", product, gender: "", items: [], photoUrl: product.image_url || "" },
-      (onEvent) => streamLook(product.name, onEvent),
+      (onEvent) => streamLook(product.name, onEvent, getNumericPrice(product)),
       "Couldn't put a look together. Please try again."
     );
   }

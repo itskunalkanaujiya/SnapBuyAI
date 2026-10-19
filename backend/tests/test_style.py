@@ -12,6 +12,7 @@ from conftest import FakeResponse
 RATING = {
     "gender": "women",
     "score": 8.46,
+    "wearing": ["maroon heart print shirt", "red leather skirt"],
     "verdict": "A bold, playful look.",
     "occasion": "casual day out",
     "strengths": ["bold print", "bold print", "great colours", "good fit", "extra"],
@@ -62,10 +63,13 @@ def test_rating_is_read_and_fixes_are_shopped(model):
     result = st.rate_outfit(Image.new("RGB", (600, 800)), on_event=lambda kind, data: events.append((kind, data)))
 
     assert events[0] == ("rating", {"rating": {
-        "score": 8.5,
+        "score": 8.5,  # no rubric scores: the overall score is used
+        "scores": {},
+        "wearing": ["maroon heart print shirt", "red leather skirt"],
         "verdict": "A bold, playful look.",
         "occasion": "casual day out",
         "strengths": ["bold print", "great colours", "good fit"],
+        "personalised": False,
     }})
     assert [kind for kind, _ in events[1:]] == ["items", "item", "item"]
     assert [item["type"] for item in result["items"]] == ["boots", "scarf"]  # one per type
@@ -136,3 +140,42 @@ def test_colours_without_a_key(png_bytes):
         "/api/v1/style/colours", files={"file": ("me.png", png_bytes("tan"), "image/png")}
     )
     assert response.status_code == 422 and "isn't set up" in response.json()["detail"]
+
+
+def test_score_is_the_mean_of_the_rubric(model):
+    model["answer"] = {**RATING, "scores": {"colours": 8, "fit": 7, "styling": 5.5, "occasion": 7.5, "vibe": 10}}
+    result = st.rate_outfit(Image.new("RGB", (100, 100)))
+    assert result["rating"]["score"] == 7.0
+    assert result["rating"]["scores"] == {"colours": 8.0, "fit": 7.0, "styling": 5.5, "occasion": 7.5}
+
+
+def test_fixes_keep_their_price_range(model):
+    model["answer"] = {**RATING, "fixes": [
+        {"type": "belt", "advice": "Add a belt.", "description": "black leather belt", "price_range": [1500, 400]},
+        {"type": "watch", "advice": "Add a watch.", "description": "silver watch", "price_range": "cheap"},
+    ]}
+    result = st.rate_outfit(Image.new("RGB", (100, 100)))
+    assert [item["price_range"] for item in result["items"]] == [[400, 1500], None]
+
+
+def test_best_colours_go_into_the_prompt(model):
+    st.rate_outfit(Image.new("RGB", (100, 100)), colours=["Maroon", "olive", ""])
+    prompt = model["sent"][0]["messages"][0]["content"][0]["text"]
+    assert "Their best colours are maroon, olive" in prompt
+    assert "PALETTE_RULE" not in prompt
+
+    model["sent"].clear()
+    st.rate_outfit(Image.new("RGB", (100, 100)))
+    assert "best colours" not in model["sent"][0]["messages"][0]["content"][0]["text"]
+
+
+def test_rate_endpoint_passes_colours(model, png_bytes, monkeypatch):
+    seen = []
+    monkeypatch.setattr(main, "rate_outfit", lambda image, on_event, colours: seen.append(colours) or {
+        "rating": {"score": 7}, "gender": "women", "items": []})
+    TestClient(main.app).post(
+        "/api/v1/style/rate/stream",
+        files={"file": ("me.png", png_bytes("blue"), "image/png")},
+        data={"colours": "maroon, olive ,"},
+    )
+    assert seen == [["maroon", "olive"]]

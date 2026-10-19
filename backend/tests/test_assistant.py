@@ -128,7 +128,7 @@ def test_complete_the_look_searches_each_item(groq, monkeypatch):
     ]}
     searched = []
 
-    def search(query, max_results, understand):
+    def search(query, max_results, understand, min_relevance=None):
         searched.append(query)
         return {"best_matches": [{"name": query}], "cheapest_alternatives": []}
 
@@ -143,7 +143,7 @@ def test_complete_the_look_searches_each_item(groq, monkeypatch):
 def test_look_stream_endpoint(groq, monkeypatch):
     groq["reply"] = {"gender": "women", "items": [{"type": "juttis", "description": "gold embroidered juttis"}]}
     monkeypatch.setattr(o, "search_products_by_text",
-                        lambda query, max_results, understand: {"best_matches": [{"name": "Juttis"}], "cheapest_alternatives": []})
+                        lambda query, max_results, understand, min_relevance=None: {"best_matches": [{"name": "Juttis"}], "cheapest_alternatives": []})
     client = TestClient(main.app)
 
     response = client.post("/api/v1/look/stream", json={"name": "Cotton kurti for women"})

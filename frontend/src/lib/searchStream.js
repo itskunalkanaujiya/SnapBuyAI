@@ -80,9 +80,11 @@ export async function streamOutfit(file, onEvent) {
  * Rate my outfit: streams "rating" (score, verdict, strengths), then
  * shoppable suggestions like Find the outfit ("items", one "item" each).
  */
-export async function streamRating(file, onEvent) {
+export async function streamRating(file, onEvent, colours) {
   const formData = new FormData();
   formData.append("file", file);
+  // The person's best colours ("Colours that suit you"), for the tips.
+  if (colours?.length) formData.append("colours", colours.join(","));
 
   const response = await fetch(`${API_URL}/api/v1/style/rate/stream`, {
     method: "POST",
@@ -107,11 +109,12 @@ export async function streamTextSearch(query, onEvent) {
  * Complete the look: items that go with a product, streamed like Find the
  * outfit ("items", then one "item" event each).
  */
-export async function streamLook(name, onEvent) {
+export async function streamLook(name, onEvent, price) {
   const response = await fetch(`${API_URL}/api/v1/look/stream`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name }),
+    // The price keeps suggestions at the same price level.
+    body: JSON.stringify({ name, price: Number.isFinite(price) ? price : null }),
   });
 
   await readEventStream(response, onEvent);

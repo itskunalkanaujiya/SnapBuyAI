@@ -139,6 +139,12 @@ function OutfitPhoto({ photoUrl, alt, items, activeId, onActivate, scanning }) {
 }
 
 const SCORE_RING_RADIUS = 34;
+const SCORE_AREAS = [
+  ["colours", "Colours"],
+  ["fit", "Fit"],
+  ["styling", "Styling"],
+  ["occasion", "Occasion"],
+];
 
 /** Rate my outfit: the score as a ring, the verdict and what works. */
 function RatingSummary({ rating }) {
@@ -174,6 +180,26 @@ function RatingSummary({ rating }) {
           </span>
         )}
       </div>
+      {rating.scores && Object.keys(rating.scores).length > 0 && (
+        <dl className="rating-areas">
+          {SCORE_AREAS.filter(([key]) => rating.scores[key] != null).map(([key, label]) => (
+            <div key={key} className={rating.scores[key] < 7 ? "is-weak" : ""}>
+              <dt>{label}</dt>
+              <dd>
+                <span className="rating-bar" aria-hidden="true">
+                  <span style={{ width: `${rating.scores[key] * 10}%` }} />
+                </span>
+                {rating.scores[key].toFixed(1)}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {rating.wearing?.length > 0 && (
+        <p className="rating-wearing">
+          <strong>Seen:</strong> {rating.wearing.join(" · ")}
+        </p>
+      )}
       {rating.strengths?.length > 0 && (
         <ul className="rating-strengths">
           {rating.strengths.map((strength) => (
@@ -350,7 +376,16 @@ export default function OutfitView({ outfit, photoUrl, savedIds, onToggleSave, o
             <>
               {isRating && <RatingSummary rating={outfit.rating} />}
               {isRating ? (
-                items.length > 0 && <h3 className="rating-fixes-title">Level it up</h3>
+                items.length > 0 && (
+                  <h3 className="rating-fixes-title">
+                    Level it up
+                    {outfit.rating.personalised && (
+                      <span className="suits-chip">
+                        <Icon name="palette" size={12} /> In your colours
+                      </span>
+                    )}
+                  </h3>
+                )
               ) : (
                 <h2>
                   {items.length} item{items.length === 1 ? "" : "s"} {isLook ? "that go with it" : "spotted"}
