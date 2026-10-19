@@ -20,7 +20,7 @@ import {
   readHistory,
   writeHistory,
 } from "./lib/history.js";
-import { prepareForUpload } from "./lib/resizeImage.js";
+import { cropToFile, prepareForUpload } from "./lib/resizeImage.js";
 import { streamLook, streamOutfit, streamSearch, streamTextSearch } from "./lib/searchStream.js";
 import AssistantChat from "./components/AssistantChat.jsx";
 import {
@@ -122,8 +122,10 @@ export default function App() {
   // Find the outfit: { gender, items, photoUrl } while shown.
   const [outfit, setOutfit] = useState(null);
   const [isFindingOutfit, setIsFindingOutfit] = useState(false);
-  // The results a "Complete the look" was opened from, to go back to.
-  const [lookReturn, setLookReturn] = useState(null);
+  // What to go back to: the results a "Complete the look" was opened
+  // from ({ results, filters }), or the outfit an "Exact match" search
+  // was started from ({ outfit }).
+  const [returnTo, setReturnTo] = useState(null);
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [saved, setSaved] = useState(readSaved);
   const [history, setHistory] = useState(readHistory);
@@ -236,7 +238,7 @@ export default function App() {
     setPreviewUrl(URL.createObjectURL(nextFile));
     setResults(null);
     setOutfit(null);
-    setLookReturn(null);
+    setReturnTo(null);
     setFilters(DEFAULT_FILTERS);
   }
 
@@ -318,7 +320,7 @@ export default function App() {
     setOriginalUrl("");
     setResults(null);
     setOutfit(null);
-    setLookReturn(null);
+    setReturnTo(null);
     setFilters(DEFAULT_FILTERS);
     setError("");
   }
@@ -376,10 +378,13 @@ export default function App() {
   }
 
   // refineQuery: optional words to narrow the search (from "Refine").
-  async function search(refineQuery) {
+  // itemFile: search this photo instead of the uploaded one (an outfit
+  // item's crop), with returnPoint to go back to afterwards.
+  async function search(refineQuery, itemFile, returnPoint) {
     const query = typeof refineQuery === "string" ? refineQuery.trim() : "";
+    const searchFile = itemFile instanceof File ? itemFile : file;
 
-    if (!file) {
+    if (!searchFile) {
       setError("Please upload a product photo first.");
       return;
     }
@@ -387,7 +392,7 @@ export default function App() {
     setError("");
     setResults(null);
     setOutfit(null);
-    setLookReturn(null);
+    setReturnTo(returnPoint || null);
     setFilters(DEFAULT_FILTERS);
     setElapsed(0);
     setIdentifiedQuery("");
@@ -401,7 +406,7 @@ export default function App() {
     let finalData = null;
 
     try {
-      const upload = await prepareForUpload(file);
+      const upload = await prepareForUpload(searchFile);
 
       await streamSearch(upload, (event) => {
         switch (event.type) {
@@ -446,7 +451,7 @@ export default function App() {
       setIsComplete(true);
       await new Promise((resolve) => setTimeout(resolve, PROGRESS_FINISH_MS));
       setResults(finalResults);
-      rememberSearch(file, finalResults);
+      rememberSearch(searchFile, finalResults);
     } catch (searchError) {
       // Keep any preview results, but stop showing them as "checking".
       setResults(clearPending);
@@ -468,9 +473,11 @@ export default function App() {
       return;
     }
 
-    setLookReturn(null);
+    setReturnTo(null);
     await streamItems(
-      { kind: "outfit", gender: "", items: [], photoUrl: previewUrl },
+      // Its own URL: the preview's is revoked when another photo is shown,
+      // and the outfit can be returned to after an "Exact match" search.
+      { kind: "outfit", gender: "", items: [], photoUrl: URL.createObjectURL(file) },
       async (onEvent) => streamOutfit(await prepareForUpload(file), onEvent),
       "Couldn't find the outfit. Please try again."
     );
@@ -480,7 +487,7 @@ export default function App() {
   async function completeLook(product) {
     if (isFindingOutfit || !product?.name) return;
 
-    if (results) setLookReturn({ results, filters });
+    if (results) setReturnTo({ results, filters });
     setView("discover");
     await streamItems(
       { kind: "look", product, gender: "", items: [], photoUrl: product.image_url || "" },
@@ -489,12 +496,31 @@ export default function App() {
     );
   }
 
-  function backToResults() {
-    if (!lookReturn) return;
-    setOutfit(null);
-    setResults(lookReturn.results);
-    setFilters(lookReturn.filters);
-    setLookReturn(null);
+  function goBack() {
+    if (!returnTo) return;
+    setOutfit(returnTo.outfit || null);
+    setResults(returnTo.results || null);
+    setFilters(returnTo.filters || DEFAULT_FILTERS);
+    setReturnTo(null);
+    scrolledRef.current = false;
+  }
+
+  // Search one outfit item by photo (Google Lens on its crop) for the exact
+  // product, keeping the outfit to come back to.
+  async function findExactMatch(item) {
+    if (!outfit?.photoUrl || !item.box || isSearching) return;
+
+    let itemFile;
+    try {
+      itemFile = await cropToFile(outfit.photoUrl, item.box, `${item.type || "item"}.jpg`);
+    } catch (cropError) {
+      setError(cropError.message);
+      return;
+    }
+    const returnPoint = { outfit };
+    showImage(itemFile);
+    setMode("photo");
+    await search(undefined, itemFile, returnPoint);
   }
 
   // Show items (an outfit or a look) streamed by start(onEvent): "items",
@@ -575,7 +601,7 @@ export default function App() {
     setError("");
     setResults(null);
     setOutfit(null);
-    setLookReturn(null);
+    setReturnTo(null);
     setFilters(DEFAULT_FILTERS);
     scrolledRef.current = false;
     setIsSearching(true);
@@ -761,8 +787,18 @@ export default function App() {
                 onToggleSave={toggleSaved}
                 onTryOn={setTryOnProduct}
                 onMore={searchText}
-                onBack={lookReturn && !isFindingOutfit ? backToResults : null}
+                onBack={returnTo?.results && !isFindingOutfit ? goBack : null}
+                onExactMatch={outfit.kind === "look" || isSearching ? null : findExactMatch}
               />
+            )}
+
+            {results && returnTo?.outfit && !isSearching && (
+              <div className="container">
+                <button type="button" className="button button-ghost button-sm outfit-back" onClick={goBack}>
+                  <Icon name="undo" size={15} />
+                  Back to the outfit
+                </button>
+              </div>
             )}
 
             {results && (

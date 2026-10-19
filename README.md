@@ -58,13 +58,22 @@ closest matches, with the saving shown. Text search accepts Hindi and
 Hinglish ("50k ke andar 8GB RAM wala laptop"), typed or spoken through the
 browser's speech recognition (English or Hindi).
 
-**Find the outfit.** For a photo of a person, a vision model on Groq
-(Qwen3.8 27B, free tier; `backend/outfit_service.py`) lists everything they
-wear, each with a short shopping description and an approximate box, in
-about 1–1.5 s. Every item is then searched on Google Shopping (through
-Serper) in parallel, so a whole outfit takes about 4 s and uses no Google
-Lens searches. Results stream in item by item; the boxes give each item a
-thumbnail cropped from the photo.
+**Find the outfit.** For a photo of a person, a vision model
+(`backend/outfit_service.py`) checks them head to toe (headwear, eyewear,
+jewellery, outerwear, top, drapes such as dupattas and sarees, bottom, belt,
+watch, bag, footwear) and lists up to 8 items, each with a shopping
+description and a box, in about 2 s. Gemini Flash is used when
+`GEMINI_API_KEY` is set (it finds more items and boxes them better), with
+Qwen3.8 27B on Groq as the fallback. The photo is padded to a square before
+it's sent, so boxes land on the right item in portrait photos too.
+
+Every item is then searched on Google Shopping (through Serper) in
+parallel, taking a wide pool of listings with only a loose title match, and
+the listings are re-ranked by how much their photos look like the item's
+crop from the photo (CLIP): ones clearly less alike than the best match, and
+ones priced over 4× the item's typical price, are dropped. A whole outfit
+uses no Google Lens searches; **Exact match** on an item runs a photo search
+(Lens) on just its crop, with a way back to the outfit.
 
 **Search providers.** Each search uses the provider that did best in our
 side-by-side tests: photo search uses Google Lens through **SearchApi.io**

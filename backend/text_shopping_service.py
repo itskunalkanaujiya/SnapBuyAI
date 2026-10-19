@@ -354,13 +354,18 @@ def build_shopping_product(item, query):
     }
 
 
-def search_products_by_text(query: str, max_results: int = 10, understand: bool = True) -> dict:
+def search_products_by_text(
+    query: str, max_results: int = 10, understand: bool = True, min_relevance: float | None = None
+) -> dict:
     """
     Search Google Shopping for a typed query.
 
     Top results keep Google's order among relevant listings (imports and
     very high prices last); Lowest Prices are the cheapest remaining relevant
     listings, without suspiciously cheap ones.
+
+    min_relevance replaces the usual title-match filter, for callers that
+    rank the listings themselves (Find the outfit compares their photos).
     """
     if not 1 <= max_results <= 40:
         raise ValueError("max_results must be between 1 and 40.")
@@ -409,8 +414,8 @@ def search_products_by_text(query: str, max_results: int = 10, understand: bool 
     if parsed.min_price is not None:
         products = [p for p in products if p["price"] >= parsed.min_price]
 
-    relevant = [p for p in products if p["text_relevance_score"] >= MIN_RELEVANCE]
-    if len(relevant) < MIN_RESULTS_BEFORE_RELAXING:
+    relevant = [p for p in products if p["text_relevance_score"] >= (min_relevance or MIN_RELEVANCE)]
+    if min_relevance is None and len(relevant) < MIN_RESULTS_BEFORE_RELAXING:
         relevant = [p for p in products if p["text_relevance_score"] >= RELAXED_RELEVANCE]
     if structured and len(relevant) < MIN_RESULTS_BEFORE_RELAXING:
         # Google already searched the precise request; titles often omit the

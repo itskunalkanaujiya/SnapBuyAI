@@ -650,7 +650,7 @@ def download_thumbnail(url):
         return None
 
 
-def download_thumbnails(candidates):
+def download_thumbnails(candidates, deadline=THUMBNAIL_DEADLINE):
     """
     Download every candidate's thumbnail in parallel.
 
@@ -661,7 +661,7 @@ def download_thumbnails(candidates):
     futures = [
         pool.submit(download_thumbnail, item.get("thumbnail")) for item in candidates
     ]
-    wait(futures, timeout=THUMBNAIL_DEADLINE)
+    wait(futures, timeout=deadline)
     pool.shutdown(wait=False, cancel_futures=True)
 
     skipped = sum(1 for future in futures if not future.done())
@@ -678,6 +678,8 @@ def compute_visual_similarity_scores(image_path, candidates, thumbnails=None):
     """
     Return CLIP cosine similarities, not probabilities.
 
+    image_path may also be a PIL image (e.g. a crop of the photo).
+
     Pass thumbnails from download_thumbnails() to reuse them; otherwise
     they are downloaded here.
     """
@@ -689,9 +691,12 @@ def compute_visual_similarity_scores(image_path, candidates, thumbnails=None):
         return {}
 
     try:
-        with Image.open(image_path) as image:
-            query_image = image.convert("RGB")
-            query_image.load()
+        if isinstance(image_path, Image.Image):
+            query_image = image_path.convert("RGB")
+        else:
+            with Image.open(image_path) as image:
+                query_image = image.convert("RGB")
+                query_image.load()
     except Exception as exc:
         print(f"Could not open uploaded image for CLIP: {exc}")
         return {}

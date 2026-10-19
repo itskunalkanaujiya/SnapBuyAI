@@ -2,11 +2,17 @@
 Find the outfit: identify everything a person in a photo is wearing, then
 find shopping options for each item.
 
-A vision model on Groq (Qwen3.8 27B, free tier) lists the clothing and
-accessories with a short shopping description and an approximate box for
-each. Every item is then searched on Google Shopping (the text search
-pipeline, through Serper) in parallel, so a whole outfit costs no Google
-Lens searches.
+A vision model lists the clothing and accessories, head to toe, with a
+shopping description and a box for each. Gemini Flash (Google AI Studio's
+free tier) is used when GEMINI_API_KEY is set, as it finds more items and
+places boxes better; otherwise, or if it fails, Qwen3.8 27B on Groq. The
+photo is padded to a square first, so both models' coordinates mean the
+same thing on portrait and landscape photos.
+
+Every item is then searched on Google Shopping (the text search pipeline,
+through Serper) in parallel, so a whole outfit costs no Google Lens
+searches. The listings are re-ranked by how much their photos look like
+the item's crop from the photo (CLIP), and clear mismatches are dropped.
 
 Complete the look works the same way from a product instead of a photo: a
 text model suggests the items that go with it (shoes and a belt for a
@@ -18,42 +24,95 @@ import io
 import json
 import os
 import re
+import statistics
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import requests
 from PIL import Image, ImageOps
 
 from llm_query_parser import GROQ_URL, chat_json
+from image_shopping_service import compute_visual_similarity_scores, download_thumbnails, load_clip_model
 from text_shopping_service import search_products_by_text
 
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+# Tried in order; a model Google has retired (404) is skipped.
+GEMINI_MODELS = [
+    model
+    for model in (os.getenv("GEMINI_MODEL"), "gemini-2.5-flash", "gemini-2.0-flash")
+    if model
+]
 VISION_MODEL = os.getenv("GROQ_VISION_MODEL", "qwen/qwen3.8-27b")
-VISION_IMAGE_SIZE = 768  # smaller images use fewer of the per-minute tokens
+VISION_IMAGE_SIZE = 1024  # enough detail for earrings and watches
 VISION_TIMEOUT_SECONDS = 25
-MAX_ITEMS = 6
-RESULTS_PER_ITEM = 6
+PAD_COLOUR = (127, 127, 127)
+MIN_BOX_SIZE = 0.015  # boxes smaller than this (of the photo) are noise
+MAX_ITEMS = 8
+RESULTS_PER_ITEM = 8
+CHEAPER_PER_ITEM = 4
+# Listings fetched per item before they're re-ranked against the item's crop.
+SEARCH_POOL = 24
+CROP_PADDING = 0.08  # share of the box added on each side
+MIN_CROP_PIXELS = 24
+# CLIP similarity between an item's crop and a listing photo depends on the
+# item (small crops like rings score lower overall), so listings are judged
+# against the best one: more than SIMILARITY_GAP below it looks clearly
+# different (a plain shirt for a printed one) and is dropped, keeping at
+# least MIN_KEPT.
+SIMILARITY_GAP = 0.08
+MIN_KEPT = 4
+# Listings priced above this multiple of the item's typical price (a
+# ₹5 lakh designer skirt among ₹1,500 ones) are left out.
+MAX_PRICE_FACTOR = 4
+# Seven items fetch their listing photos at once; allow for that.
+THUMBNAIL_DEADLINE = 5
+# Long descriptions ("maroon white heart print long sleeve shirt") rarely
+# match listing titles word for word ("wristwatch" vs "watch"), so Google's
+# results are trusted when the listings will be compared with the crop.
+LOOSE_RELEVANCE = 0.1
 LOOK_ITEMS = 4
 LOOK_TIMEOUT_SECONDS = 10
 GENDERS = {"men", "women", "boys", "girls", "kids", "unisex"}
 
-PROMPT = """You are a fashion assistant for an Indian shopping app.
-List the clothing items and accessories worn by the main person in the photo, most noticeable first.
+PROMPT = """You are a fashion expert for an Indian shopping app.
+Look carefully at the main person in the photo, from head to toe, and list every item they wear or carry that a shopper could buy.
+
+Check each of these and include every one that is visible, even if small:
+- headwear: cap, hat, beanie, turban, hair band, maang tikka
+- eyewear: sunglasses, spectacles
+- jewellery: earrings, nose ring, necklace, chain, pendant, bangles, bracelet, kada, ring
+- outerwear: jacket, blazer, coat, shrug, cardigan
+- top: shirt, t-shirt, top, blouse, sweater, hoodie, kurta, kurti, dress, gown
+- drapes: dupatta, stole, scarf, saree, veil
+- bottom: jeans, trousers, chinos, shorts, skirt, salwar, palazzo, leggings, lehenga, dhoti
+- belt, watch, bag (handbag, backpack, sling bag, clutch, tote)
+- footwear: sneakers, shoes, loafers, heels, sandals, flats, juttis, mojaris, boots
+
 Return JSON only:
 {
   "gender": "men" | "women" | "boys" | "girls" | "kids" | "unisex",
   "items": [
     {
-      "type": short category, e.g. "t-shirt", "jeans", "sneakers", "watch", "sunglasses", "handbag",
-      "description": a 3-8 word shopping search with colour, pattern, style and material, e.g. "dark blue slim fit denim jeans",
-      "box": [x1, y1, x2, y2] around the item, each from 0 to 1000 relative to the image width and height
+      "type": short category from the list above, e.g. "shirt", "sunglasses", "jhumka earrings",
+      "description": a 4-10 word shopping search: colour, pattern, material, fit or style, then the item, e.g. "maroon white heart print silk shirt",
+      "box": BOX_FORMAT
     }
   ]
 }
 Rules:
-- Only things the person wears or carries. Not body parts, hair, background or furniture.
-- At most 6 items. One entry per item: a pair of shoes is one item.
+- Only things the person wears or carries: not body parts, hair, tattoos, mehendi, background or other people.
+- One entry per item: a pair of shoes or earrings is one item; several bangles on one arm are one item.
+- Skip anything you cannot see (feet cut off means no footwear).
 - Name a brand only if its logo or name is clearly readable on the item.
+- At most 8 items, most noticeable first.
 - If no person is visible, return {"gender": "unisex", "items": []}."""
 
+# How each model family writes boxes. Gemini is trained on [ymin, xmin,
+# ymax, xmax]; Qwen on [x1, y1, x2, y2]. Both use 0-1000 of the image.
+BOX_FORMATS = {
+    "xyxy": "[x1, y1, x2, y2] tightly around just this item, each from 0 to 1000 of the image width (x) and height (y)",
+    "yxyx": "[ymin, xmin, ymax, xmax] tightly around just this item, each from 0 to 1000 of the image height (y) and width (x)",
+}
 
 LOOK_PROMPT = """You are a stylist for an Indian shopping app.
 The customer is looking at one product. Suggest the other items that go best with it.
@@ -82,23 +141,58 @@ class OutfitError(Exception):
     user_facing = True
 
 
-def _image_data_url(image):
+def vision_providers():
+    """The vision models to try, best first: (name, url, api key, models, box order)."""
+    providers = []
+    if os.getenv("GEMINI_API_KEY"):
+        providers.append(("Gemini", GEMINI_URL, os.environ["GEMINI_API_KEY"], GEMINI_MODELS, "yxyx"))
+    if os.getenv("GROQ_API_KEY"):
+        providers.append(("Groq", GROQ_URL, os.environ["GROQ_API_KEY"], [VISION_MODEL], "xyxy"))
+    return providers
+
+
+def square_photo(image):
+    """
+    The photo shrunk to VISION_IMAGE_SIZE and centred on a square canvas,
+    with the frame (left, top, width, height, side) needed to map boxes back.
+    """
     image = ImageOps.exif_transpose(image).convert("RGB")
     image.thumbnail((VISION_IMAGE_SIZE, VISION_IMAGE_SIZE))
+    width, height = image.size
+    side = max(width, height)
+    canvas = Image.new("RGB", (side, side), PAD_COLOUR)
+    left, top = (side - width) // 2, (side - height) // 2
+    canvas.paste(image, (left, top))
+    return canvas, (left, top, width, height, side)
+
+
+def _data_url(image):
     buffer = io.BytesIO()
-    image.save(buffer, format="JPEG", quality=82)
+    image.save(buffer, format="JPEG", quality=85)
     return "data:image/jpeg;base64," + base64.b64encode(buffer.getvalue()).decode()
 
 
-def _box(value):
-    """A model box (0-1000) as fractions [x1, y1, x2, y2], or None if unusable."""
+def _box(value, frame, order="xyxy"):
+    """
+    A model box (0-1000 of the square) as fractions of the original photo
+    [x1, y1, x2, y2], or None if unusable.
+    """
     if not isinstance(value, (list, tuple)) or len(value) != 4:
         return None
     try:
-        x1, y1, x2, y2 = (min(1000.0, max(0.0, float(v))) / 1000 for v in value)
+        numbers = [min(1000.0, max(0.0, float(v))) / 1000 for v in value]
     except (TypeError, ValueError):
         return None
-    if x2 - x1 < 0.02 or y2 - y1 < 0.02:
+    if order == "yxyx":
+        numbers = [numbers[1], numbers[0], numbers[3], numbers[2]]
+    left, top, width, height, side = frame
+
+    def unpad(fraction, offset, size):
+        return min(1.0, max(0.0, (fraction * side - offset) / size))
+
+    x1, x2 = sorted(unpad(n, left, width) for n in (numbers[0], numbers[2]))
+    y1, y2 = sorted(unpad(n, top, height) for n in (numbers[1], numbers[3]))
+    if x2 - x1 < MIN_BOX_SIZE or y2 - y1 < MIN_BOX_SIZE:
         return None
     return [round(x1, 4), round(y1, 4), round(x2, 4), round(y2, 4)]
 
@@ -109,69 +203,103 @@ def _clean(text, limit):
     return re.sub(r"\s+", " ", text).strip()[:limit]
 
 
-def identify_outfit(image):
-    """
-    The items the main person wears: {"gender", "items": [{"id", "type",
-    "description", "box"}]}. Raises OutfitError with a user-facing message.
-    """
-    api_key = os.getenv("GROQ_API_KEY")
-    if not api_key:
-        raise OutfitError("Find the outfit isn't set up on this server yet.")
+def ask_vision_model(url, api_key, models, prompt, photo_url):
+    """The first available model's JSON answer about the photo. Raises OutfitError."""
+    for model in models:
+        try:
+            response = requests.post(
+                url,
+                headers={"Authorization": f"Bearer {api_key}"},
+                json={
+                    "model": model,
+                    "temperature": 0,
+                    "max_tokens": 1400,
+                    "response_format": {"type": "json_object"},
+                    "messages": [{
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {"type": "image_url", "image_url": {"url": photo_url}},
+                        ],
+                    }],
+                },
+                timeout=VISION_TIMEOUT_SECONDS,
+            )
+        except requests.RequestException as exc:
+            print(f"Outfit model request failed ({model}): {exc}")
+            raise OutfitError("Couldn't reach the outfit AI. Please try again.")
 
-    try:
-        response = requests.post(
-            GROQ_URL,
-            headers={"Authorization": f"Bearer {api_key}"},
-            json={
-                "model": VISION_MODEL,
-                "temperature": 0,
-                "max_tokens": 900,
-                "response_format": {"type": "json_object"},
-                "messages": [{
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": PROMPT},
-                        {"type": "image_url", "image_url": {"url": _image_data_url(image)}},
-                    ],
-                }],
-            },
-            timeout=VISION_TIMEOUT_SECONDS,
-        )
-    except requests.RequestException as exc:
-        print(f"Outfit model request failed: {exc}")
-        raise OutfitError("Couldn't reach the outfit AI. Please try again.")
+        if response.status_code == 404:
+            print(f"Vision model {model} is not available; trying the next one.")
+            continue
+        if response.status_code == 429:
+            raise OutfitError("The outfit AI is busy right now. Please try again in a minute.")
+        if response.status_code != 200:
+            print(f"Outfit model error {response.status_code} ({model}): {response.text[:300]}")
+            raise OutfitError("Couldn't identify the outfit. Please try again.")
 
-    if response.status_code == 429:
-        raise OutfitError("The outfit AI is busy right now. Please try again in a minute.")
-    if response.status_code != 200:
-        print(f"Outfit model error {response.status_code}: {response.text[:300]}")
-        raise OutfitError("Couldn't identify the outfit. Please try again.")
+        try:
+            content = response.json()["choices"][0]["message"]["content"]
+            # Some models wrap JSON in a code fence despite the JSON mode.
+            content = re.sub(r"^```(?:json)?\s*|\s*```$", "", content.strip())
+            data = json.loads(content)
+            if not isinstance(data, dict):
+                raise ValueError("not an object")
+            return data
+        except (KeyError, IndexError, TypeError, ValueError) as exc:
+            print(f"Outfit model returned unreadable output ({model}): {exc}")
+            raise OutfitError("Couldn't identify the outfit. Please try another photo.")
 
-    try:
-        data = json.loads(response.json()["choices"][0]["message"]["content"])
-    except (KeyError, IndexError, TypeError, ValueError) as exc:
-        print(f"Outfit model returned unreadable output: {exc}")
-        raise OutfitError("Couldn't identify the outfit. Please try another photo.")
+    raise OutfitError("Couldn't identify the outfit. Please try again.")
 
+
+def read_outfit(data, frame, order):
+    """The model's answer as {"gender", "items": [{"id", "type", "description", "box"}]}."""
     gender = _clean(data.get("gender"), 10).lower()
-    items = []
+    items, seen = [], set()
     for raw in data.get("items") or []:
         if not isinstance(raw, dict):
             continue
         item_type = _clean(raw.get("type"), 30).lower()
-        description = _clean(raw.get("description"), 80)
-        if not item_type or not description:
+        description = _clean(raw.get("description"), 90)
+        if not item_type or not description or description.lower() in seen:
             continue
+        seen.add(description.lower())
         items.append({
             "id": f"item-{len(items) + 1}",
             "type": item_type,
             "description": description,
-            "box": _box(raw.get("box")),
+            "box": _box(raw.get("box") or raw.get("box_2d"), frame, order),
         })
         if len(items) == MAX_ITEMS:
             break
-
     return {"gender": gender if gender in GENDERS else "unisex", "items": items}
+
+
+def identify_outfit(image):
+    """
+    The items the main person wears: {"gender", "items": [{"id", "type",
+    "description", "box"}]}. Tries each vision provider in turn; raises
+    OutfitError with a user-facing message if none can answer.
+    """
+    providers = vision_providers()
+    if not providers:
+        raise OutfitError("Find the outfit isn't set up on this server yet.")
+
+    square, frame = square_photo(image)
+    photo_url = _data_url(square)
+    error = None
+    for name, url, api_key, models, order in providers:
+        prompt = PROMPT.replace("BOX_FORMAT", BOX_FORMATS[order])
+        try:
+            outfit = read_outfit(ask_vision_model(url, api_key, models, prompt, photo_url), frame, order)
+        except OutfitError as exc:
+            print(f"{name} could not identify the outfit: {exc}")
+            error = exc
+            continue
+        outfit["model"] = name
+        return outfit
+    raise error
 
 
 def item_query(item, gender):
@@ -193,26 +321,115 @@ def _emitter(on_event):
     return emit
 
 
-def shop_items(items, gender, emit):
-    """Search every item in parallel, adding its results; emits "item" each."""
+def crop_item(image, box):
+    """The item's region of the photo (with a little margin), or None."""
+    if not box or image is None:
+        return None
+    image = ImageOps.exif_transpose(image).convert("RGB")
+    width, height = image.size
+    x1, y1, x2, y2 = box
+    pad_x, pad_y = (x2 - x1) * CROP_PADDING, (y2 - y1) * CROP_PADDING
+    left, top = max(0, (x1 - pad_x) * width), max(0, (y1 - pad_y) * height)
+    right, bottom = min(width, (x2 + pad_x) * width), min(height, (y2 + pad_y) * height)
+    if right - left < MIN_CROP_PIXELS or bottom - top < MIN_CROP_PIXELS:
+        return None
+    return image.crop((round(left), round(top), round(right), round(bottom)))
+
+
+def unique_listings(result):
+    seen, listings = set(), []
+    for product in (result.get("best_matches") or []) + (result.get("cheapest_alternatives") or []):
+        key = product.get("product_url") or product.get("name")
+        if key not in seen:
+            seen.add(key)
+            listings.append(product)
+    return listings
+
+
+def rank_by_look(crop, result):
+    """
+    Order an item's listings by how much their photos look like the item's
+    crop, dropping clear mismatches. Returns (best_matches, cheapest).
+    """
+    listings = unique_listings(result)
+    scores = {}
+    if crop is not None and listings:
+        thumbnails = download_thumbnails(
+            [{"thumbnail": p.get("image_url")} for p in listings], deadline=THUMBNAIL_DEADLINE
+        )
+        scores = compute_visual_similarity_scores(crop, listings, thumbnails=thumbnails)
+
+    if not scores:
+        # No crop or no CLIP: keep the text search's own order.
+        best = (result.get("best_matches") or [])[:RESULTS_PER_ITEM]
+        cheapest = (result.get("cheapest_alternatives") or [])[:CHEAPER_PER_ITEM]
+        return best, cheapest
+
+    for index, product in enumerate(listings):
+        product["visual_similarity_score"] = scores.get(index)
+    prices = [p["price"] for p in listings if p.get("price")]
+    typical = statistics.median(prices) if len(prices) >= MIN_KEPT else None
+    scored = sorted(
+        (
+            p for p in listings
+            if p["visual_similarity_score"] is not None
+            and not (typical and p.get("price") and p["price"] > MAX_PRICE_FACTOR * typical)
+        ),
+        key=lambda p: -p["visual_similarity_score"],
+    )
+    if not scored:
+        best = (result.get("best_matches") or [])[:RESULTS_PER_ITEM]
+        return best, (result.get("cheapest_alternatives") or [])[:CHEAPER_PER_ITEM]
+    floor = scored[0]["visual_similarity_score"] - SIMILARITY_GAP
+    alike = [p for p in scored if p["visual_similarity_score"] >= floor]
+    kept = alike if len(alike) >= MIN_KEPT else scored[:MIN_KEPT]
+    if len(kept) < MIN_KEPT:
+        # Listings whose photo didn't load follow, in Google's order.
+        unscored = [p for p in result.get("best_matches") or [] if p.get("visual_similarity_score") is None]
+        kept += unscored[:MIN_KEPT - len(kept)]
+
+    best = kept[:RESULTS_PER_ITEM]
+    shown = {id(p) for p in best}
+    cheapest = sorted(
+        (p for p in kept if id(p) not in shown and p.get("price") is not None),
+        key=lambda p: p["price"],
+    )[:CHEAPER_PER_ITEM]
+    # Crop scores run lower than whole-photo scores, so they'd read as weak
+    # "match" badges on the cards; they're only used for ordering here.
+    for product in listings:
+        product.pop("visual_similarity_score", None)
+    return best, cheapest
+
+
+def shop_items(items, gender, emit, image=None):
+    """
+    Search every item in parallel, adding its results; emits "item" each.
+    With the photo, each item's listings are re-ranked against its crop.
+    """
     for item in items:
         item["query"] = item_query(item, gender)
     emit("items", {"gender": gender, "items": items})
 
     def search(item):
         try:
+            crop = crop_item(image, item.get("box"))
             # The description is already a clean search; skip the text model.
-            result = search_products_by_text(item["query"], RESULTS_PER_ITEM, understand=False)
-            return item, result, None
+            if crop is not None:
+                result = search_products_by_text(
+                    item["query"], SEARCH_POOL, understand=False, min_relevance=LOOSE_RELEVANCE
+                )
+            else:
+                result = search_products_by_text(item["query"], RESULTS_PER_ITEM, understand=False)
+            return item, rank_by_look(crop, result), None
         except Exception as exc:
             print(f"Outfit item search failed for {item['query']!r}: {exc}")
-            return item, None, exc
+            return item, ([], []), exc
 
     with ThreadPoolExecutor(max_workers=len(items)) as pool:
         for future in as_completed([pool.submit(search, item) for item in items]):
-            item, result, error = future.result()
-            item["best_matches"] = (result or {}).get("best_matches", [])
-            item["cheapest_alternatives"] = (result or {}).get("cheapest_alternatives", [])
+            item, (best, cheapest), error = future.result()
+            item["best_matches"] = best
+            item["cheapest_alternatives"] = cheapest
             item["failed"] = error is not None
             emit("item", {"item": item})
 
@@ -227,10 +444,14 @@ def find_outfit(image, on_event=None):
     identified and "item" as each item's results arrive. Returns
     {"gender", "items": [{..., "query", "best_matches", "cheapest_alternatives"}]}.
     """
+    # Load the image model while the vision model looks at the photo.
+    threading.Thread(target=load_clip_model, daemon=True).start()
     outfit = identify_outfit(image)
     if not outfit["items"]:
         raise OutfitError("Couldn't find a person's outfit in this photo. Try a clear photo of someone.")
-    return shop_items(outfit["items"], outfit["gender"], _emitter(on_event))
+    result = shop_items(outfit["items"], outfit["gender"], _emitter(on_event), image=image)
+    result["model"] = outfit.get("model")
+    return result
 
 
 def suggest_look(product_name):

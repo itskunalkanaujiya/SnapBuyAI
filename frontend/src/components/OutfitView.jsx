@@ -138,7 +138,7 @@ function OutfitPhoto({ photoUrl, alt, items, activeId, onActivate, scanning }) {
   );
 }
 
-function ItemSection({ item, index, thumbnail, savedIds, onToggleSave, onTryOn, onMore }) {
+function ItemSection({ item, index, thumbnail, savedIds, onToggleSave, onTryOn, onMore, onExactMatch }) {
   const products = itemProducts(item);
   const lowest = lowestPrice(item);
   const deals = computeDeals(products);
@@ -160,6 +160,17 @@ function ItemSection({ item, index, thumbnail, savedIds, onToggleSave, onTryOn, 
             <small>from</small>
             {formatAmount(lowest)}
           </span>
+        )}
+        {!item.pending && onExactMatch && item.box && (
+          <button
+            type="button"
+            className="button button-ghost button-sm outfit-exact"
+            onClick={() => onExactMatch(item)}
+            title="Search this item's part of your photo with Google Lens (uses one photo search)"
+          >
+            <Icon name="scan" size={14} />
+            Exact match
+          </button>
         )}
         {!item.pending && products.length > 0 && (
           <button type="button" className="button button-ghost button-sm outfit-more" onClick={() => onMore(item.query)}>
@@ -212,7 +223,7 @@ function ItemSection({ item, index, thumbnail, savedIds, onToggleSave, onTryOn, 
  * Also shows "Complete the look" (outfit.kind "look"): the product being
  * styled in place of the photo, and the items suggested to go with it.
  */
-export default function OutfitView({ outfit, photoUrl, savedIds, onToggleSave, onTryOn, onMore, onBack }) {
+export default function OutfitView({ outfit, photoUrl, savedIds, onToggleSave, onTryOn, onMore, onBack, onExactMatch }) {
   const items = useMemo(() => outfit.items || [], [outfit.items]);
   const isLook = outfit.kind === "look";
   const baseProduct = isLook ? outfit.product : null;
@@ -352,6 +363,7 @@ export default function OutfitView({ outfit, photoUrl, savedIds, onToggleSave, o
           onToggleSave={onToggleSave}
           onTryOn={onTryOn}
           onMore={onMore}
+          onExactMatch={onExactMatch}
         />
       ))}
     </section>
