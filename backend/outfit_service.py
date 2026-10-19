@@ -7,6 +7,10 @@ accessories with a short shopping description and an approximate box for
 each. Every item is then searched on Google Shopping (the text search
 pipeline, through Serper) in parallel, so a whole outfit costs no Google
 Lens searches.
+
+Complete the look works the same way from a product instead of a photo: a
+text model suggests the items that go with it (shoes and a belt for a
+shirt, a bag and a mouse for a laptop), and each is searched in parallel.
 """
 
 import base64
@@ -19,7 +23,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
 from PIL import Image, ImageOps
 
-from llm_query_parser import GROQ_URL
+from llm_query_parser import GROQ_URL, chat_json
 from text_shopping_service import search_products_by_text
 
 VISION_MODEL = os.getenv("GROQ_VISION_MODEL", "qwen/qwen3.8-27b")
@@ -27,6 +31,8 @@ VISION_IMAGE_SIZE = 768  # smaller images use fewer of the per-minute tokens
 VISION_TIMEOUT_SECONDS = 25
 MAX_ITEMS = 6
 RESULTS_PER_ITEM = 6
+LOOK_ITEMS = 4
+LOOK_TIMEOUT_SECONDS = 10
 GENDERS = {"men", "women", "boys", "girls", "kids", "unisex"}
 
 PROMPT = """You are a fashion assistant for an Indian shopping app.
@@ -47,6 +53,27 @@ Rules:
 - At most 6 items. One entry per item: a pair of shoes is one item.
 - Name a brand only if its logo or name is clearly readable on the item.
 - If no person is visible, return {"gender": "unisex", "items": []}."""
+
+
+LOOK_PROMPT = """You are a stylist for an Indian shopping app.
+The customer is looking at one product. Suggest the other items that go best with it.
+Return JSON only:
+{
+  "gender": "men" | "women" | "boys" | "girls" | "kids" | "unisex",
+  "items": [
+    {
+      "type": short category, e.g. "chinos", "loafers", "leather belt", "laptop bag",
+      "description": a 3-8 word shopping search with colour, style and material that matches the product, e.g. "tan leather slip-on loafers",
+      "reason": under 12 words on why it goes well, e.g. "Tan leather keeps the navy shirt smart but relaxed"
+    }
+  ]
+}
+Rules:
+- 3 or 4 items, most useful first, each a different type, none the same type as the product.
+- Clothing: complete a wearable outfit (bottom or top, footwear, one or two accessories) in colours that suit the product.
+- Anything else (a laptop, phone, kitchen item): suggest the accessories people usually buy with it.
+- No brands unless the product's brand makes its own matching accessories.
+- Gender from the product name; "unisex" if unclear."""
 
 
 class OutfitError(Exception):
@@ -155,15 +182,7 @@ def item_query(item, gender):
     return description
 
 
-def find_outfit(image, on_event=None):
-    """
-    Identify the outfit, then search every item in parallel.
-
-    on_event(event_type, payload) is called with "items" once the outfit is
-    identified and "item" as each item's results arrive. Returns
-    {"gender", "items": [{..., "query", "best_matches", "cheapest_alternatives"}]}.
-    """
-
+def _emitter(on_event):
     def emit(event_type, payload):
         if on_event is not None:
             try:
@@ -171,11 +190,11 @@ def find_outfit(image, on_event=None):
             except Exception as exc:
                 print(f"Outfit event handler failed: {exc}")
 
-    outfit = identify_outfit(image)
-    gender, items = outfit["gender"], outfit["items"]
-    if not items:
-        raise OutfitError("Couldn't find a person's outfit in this photo. Try a clear photo of someone.")
+    return emit
 
+
+def shop_items(items, gender, emit):
+    """Search every item in parallel, adding its results; emits "item" each."""
     for item in items:
         item["query"] = item_query(item, gender)
     emit("items", {"gender": gender, "items": items})
@@ -198,3 +217,79 @@ def find_outfit(image, on_event=None):
             emit("item", {"item": item})
 
     return {"gender": gender, "items": items}
+
+
+def find_outfit(image, on_event=None):
+    """
+    Identify the outfit, then search every item in parallel.
+
+    on_event(event_type, payload) is called with "items" once the outfit is
+    identified and "item" as each item's results arrive. Returns
+    {"gender", "items": [{..., "query", "best_matches", "cheapest_alternatives"}]}.
+    """
+    outfit = identify_outfit(image)
+    if not outfit["items"]:
+        raise OutfitError("Couldn't find a person's outfit in this photo. Try a clear photo of someone.")
+    return shop_items(outfit["items"], outfit["gender"], _emitter(on_event))
+
+
+def suggest_look(product_name):
+    """
+    The items that go with a product: {"gender", "items": [{"id", "type",
+    "description", "reason", "box": None}]}. Raises OutfitError.
+    """
+    if not os.getenv("GROQ_API_KEY"):
+        raise OutfitError("Complete the look isn't set up on this server yet.")
+
+    try:
+        data = chat_json(
+            [
+                {"role": "system", "content": LOOK_PROMPT},
+                {"role": "user", "content": f"Product: {product_name}"},
+            ],
+            max_tokens=700,
+            timeout=LOOK_TIMEOUT_SECONDS,
+            temperature=0.3,
+        )
+    except requests.HTTPError as exc:
+        if exc.response is not None and exc.response.status_code == 429:
+            raise OutfitError("The styling AI is busy right now. Please try again in a minute.")
+        print(f"Look model error: {exc}")
+        raise OutfitError("Couldn't put a look together. Please try again.")
+    except Exception as exc:
+        print(f"Look model failed: {exc}")
+        raise OutfitError("Couldn't put a look together. Please try again.")
+
+    gender = _clean(data.get("gender"), 10).lower()
+    product_words = set(re.findall(r"[a-z]+", product_name.lower()))
+    items, types = [], set()
+    for raw in data.get("items") or []:
+        if not isinstance(raw, dict):
+            continue
+        item_type = _clean(raw.get("type"), 30).lower()
+        description = _clean(raw.get("description"), 80)
+        # Skip repeats, and the product's own type ("shirt" for a shirt).
+        if not item_type or not description or item_type in types:
+            continue
+        if set(item_type.split()) <= product_words:
+            continue
+        types.add(item_type)
+        items.append({
+            "id": f"look-{len(items) + 1}",
+            "type": item_type,
+            "description": description,
+            "reason": _clean(raw.get("reason"), 100),
+            "box": None,
+        })
+        if len(items) == LOOK_ITEMS:
+            break
+
+    return {"gender": gender if gender in GENDERS else "unisex", "items": items}
+
+
+def complete_the_look(product_name, on_event=None):
+    """Suggest what goes with a product, then search each item in parallel."""
+    look = suggest_look(product_name)
+    if not look["items"]:
+        raise OutfitError("Couldn't find items to go with this product.")
+    return shop_items(look["items"], look["gender"], _emitter(on_event))

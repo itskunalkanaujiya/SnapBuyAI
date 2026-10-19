@@ -86,3 +86,17 @@ export async function streamTextSearch(query, onEvent) {
 
   await readEventStream(response, onEvent);
 }
+
+/**
+ * Complete the look: items that go with a product, streamed like Find the
+ * outfit ("items", then one "item" event each).
+ */
+export async function streamLook(name, onEvent) {
+  const response = await fetch(`${API_URL}/api/v1/look/stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+
+  await readEventStream(response, onEvent);
+}

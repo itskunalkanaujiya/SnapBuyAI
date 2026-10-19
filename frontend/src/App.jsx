@@ -21,7 +21,8 @@ import {
   writeHistory,
 } from "./lib/history.js";
 import { prepareForUpload } from "./lib/resizeImage.js";
-import { streamOutfit, streamSearch, streamTextSearch } from "./lib/searchStream.js";
+import { streamLook, streamOutfit, streamSearch, streamTextSearch } from "./lib/searchStream.js";
+import AssistantChat from "./components/AssistantChat.jsx";
 import {
   ALLOWED_IMAGE_TYPES,
   DEFAULT_FILTERS,
@@ -74,6 +75,16 @@ function toResults(data, kind = "photo") {
   };
 }
 
+// Listings shown to the shopping assistant: a few per outfit item, so every
+// item is covered.
+const CHAT_PRODUCTS_PER_ITEM = 4;
+
+function uniqueProducts(products) {
+  const unique = new Map();
+  products.forEach((product) => unique.set(getProductId(product), product));
+  return [...unique.values()];
+}
+
 // Preview listings can be "pending" (price or stock still being checked).
 function clearPending(results) {
   if (!results) return results;
@@ -111,11 +122,39 @@ export default function App() {
   // Find the outfit: { gender, items, photoUrl } while shown.
   const [outfit, setOutfit] = useState(null);
   const [isFindingOutfit, setIsFindingOutfit] = useState(false);
+  // The results a "Complete the look" was opened from, to go back to.
+  const [lookReturn, setLookReturn] = useState(null);
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [saved, setSaved] = useState(readSaved);
   const [history, setHistory] = useState(readHistory);
 
   const savedIds = useMemo(() => new Set(saved.map(getProductId)), [saved]);
+
+  // What the shopping assistant can see, and a key that changes with it.
+  const chat = useMemo(() => {
+    if (results) {
+      return {
+        key: `results:${results.kind}:${results.query}:${results.restoredAt || ""}`,
+        query: results.query,
+        products: uniqueProducts([...results.bestMatches, ...results.dupes, ...results.cheapest]),
+      };
+    }
+    if (outfit?.items.length && !outfit.items.some((item) => item.pending)) {
+      return {
+        key: `outfit:${outfit.product?.name || outfit.photoUrl}`,
+        query: outfit.items.map((item) => item.description).join(", "),
+        products: uniqueProducts(
+          outfit.items.flatMap((item) =>
+            [...(item.best_matches || []), ...(item.cheapest_alternatives || [])].slice(
+              0,
+              CHAT_PRODUCTS_PER_ITEM
+            )
+          )
+        ),
+      };
+    }
+    return null;
+  }, [results, outfit]);
 
   useEffect(() => {
     try {
@@ -197,6 +236,7 @@ export default function App() {
     setPreviewUrl(URL.createObjectURL(nextFile));
     setResults(null);
     setOutfit(null);
+    setLookReturn(null);
     setFilters(DEFAULT_FILTERS);
   }
 
@@ -278,6 +318,7 @@ export default function App() {
     setOriginalUrl("");
     setResults(null);
     setOutfit(null);
+    setLookReturn(null);
     setFilters(DEFAULT_FILTERS);
     setError("");
   }
@@ -346,6 +387,7 @@ export default function App() {
     setError("");
     setResults(null);
     setOutfit(null);
+    setLookReturn(null);
     setFilters(DEFAULT_FILTERS);
     setElapsed(0);
     setIdentifiedQuery("");
@@ -426,9 +468,41 @@ export default function App() {
       return;
     }
 
+    setLookReturn(null);
+    await streamItems(
+      { kind: "outfit", gender: "", items: [], photoUrl: previewUrl },
+      async (onEvent) => streamOutfit(await prepareForUpload(file), onEvent),
+      "Couldn't find the outfit. Please try again."
+    );
+  }
+
+  // Suggest what goes with a product and shop each suggestion.
+  async function completeLook(product) {
+    if (isFindingOutfit || !product?.name) return;
+
+    if (results) setLookReturn({ results, filters });
+    setView("discover");
+    await streamItems(
+      { kind: "look", product, gender: "", items: [], photoUrl: product.image_url || "" },
+      (onEvent) => streamLook(product.name, onEvent),
+      "Couldn't put a look together. Please try again."
+    );
+  }
+
+  function backToResults() {
+    if (!lookReturn) return;
+    setOutfit(null);
+    setResults(lookReturn.results);
+    setFilters(lookReturn.filters);
+    setLookReturn(null);
+  }
+
+  // Show items (an outfit or a look) streamed by start(onEvent): "items",
+  // then one "item" event as each item's shopping options arrive.
+  async function streamItems(initial, start, failMessage) {
     setError("");
     setResults(null);
-    setOutfit({ gender: "", items: [], photoUrl: previewUrl });
+    setOutfit(initial);
     scrolledRef.current = false;
     setIsFindingOutfit(true);
 
@@ -443,9 +517,8 @@ export default function App() {
       );
 
     try {
-      const upload = await prepareForUpload(file);
       let finished = false;
-      await streamOutfit(upload, (event) => {
+      await start((event) => {
         switch (event.type) {
           case "items":
             setOutfit((current) => ({
@@ -466,7 +539,7 @@ export default function App() {
             }));
             break;
           case "error":
-            throw new Error(event.detail || "Couldn't find the outfit. Please try again.");
+            throw new Error(event.detail || failMessage);
           default:
             break;
         }
@@ -502,6 +575,7 @@ export default function App() {
     setError("");
     setResults(null);
     setOutfit(null);
+    setLookReturn(null);
     setFilters(DEFAULT_FILTERS);
     scrolledRef.current = false;
     setIsSearching(true);
@@ -687,6 +761,7 @@ export default function App() {
                 onToggleSave={toggleSaved}
                 onTryOn={setTryOnProduct}
                 onMore={searchText}
+                onBack={lookReturn && !isFindingOutfit ? backToResults : null}
               />
             )}
 
@@ -709,6 +784,16 @@ export default function App() {
                 savedIds={savedIds}
                 onToggleSave={toggleSaved}
                 onTryOn={setTryOnProduct}
+                onCompleteLook={completeLook}
+              />
+            )}
+
+            {chat?.products.length > 0 && !isSearching && (
+              <AssistantChat
+                key={chat.key}
+                products={chat.products}
+                query={chat.query}
+                onSearch={searchText}
               />
             )}
 
@@ -763,6 +848,7 @@ export default function App() {
                     isSaved
                     onToggleSave={toggleSaved}
                     onTryOn={setTryOnProduct}
+                    onCompleteLook={completeLook}
                   />
                 ))}
               </div>

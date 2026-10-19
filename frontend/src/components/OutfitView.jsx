@@ -96,12 +96,12 @@ function ItemThumb({ src, className = "" }) {
 }
 
 /** The photo with a numbered marker on each item and the active item outlined. */
-function OutfitPhoto({ photoUrl, items, activeId, onActivate, scanning }) {
+function OutfitPhoto({ photoUrl, alt, items, activeId, onActivate, scanning }) {
   const active = items.find((item) => item.id === activeId && item.box);
 
   return (
     <div className={`outfit-photo-frame ${scanning ? "is-scanning" : ""}`}>
-      <img src={photoUrl} alt="Your outfit photo" />
+      <img src={photoUrl} alt={alt} />
       {scanning && <span className="scan-line" aria-hidden="true" />}
       {active && (
         <span
@@ -153,6 +153,7 @@ function ItemSection({ item, index, thumbnail, savedIds, onToggleSave, onTryOn, 
         <div className="outfit-section-title">
           <h3>{capitalise(item.type)}</h3>
           <p>{capitalise(item.description)}</p>
+          {item.reason && <p className="outfit-reason">{capitalise(item.reason)}</p>}
         </div>
         {!item.pending && lowest !== null && (
           <span className="outfit-from">
@@ -207,24 +208,42 @@ function ItemSection({ item, index, thumbnail, savedIds, onToggleSave, onTryOn, 
  * Results of "Find the outfit": the photo with a marker on every item, a
  * summary with the price of the whole look, then a swipeable row of
  * shopping options per item.
+ *
+ * Also shows "Complete the look" (outfit.kind "look"): the product being
+ * styled in place of the photo, and the items suggested to go with it.
  */
-export default function OutfitView({ outfit, photoUrl, savedIds, onToggleSave, onTryOn, onMore }) {
+export default function OutfitView({ outfit, photoUrl, savedIds, onToggleSave, onTryOn, onMore, onBack }) {
   const items = useMemo(() => outfit.items || [], [outfit.items]);
-  const thumbnails = useItemThumbnails(photoUrl, items);
+  const isLook = outfit.kind === "look";
+  const baseProduct = isLook ? outfit.product : null;
+  const cropped = useItemThumbnails(isLook ? "" : photoUrl, items);
+  // A look has no photo to crop from; use each item's first listing.
+  const thumbnails = isLook
+    ? Object.fromEntries(items.map((item) => [item.id, itemProducts(item)[0]?.image_url]))
+    : cropped;
   const [activeId, setActiveId] = useState(null);
+  const basePrice = baseProduct ? getNumericPrice(baseProduct) : null;
 
   const scanning = items.length === 0;
   const remaining = items.filter((item) => item.pending).length;
   const lookPrices = items.map(lowestPrice).filter((price) => price !== null);
-  const lookTotal = lookPrices.reduce((sum, price) => sum + price, 0);
+  const lookTotal = lookPrices.reduce((sum, price) => sum + price, basePrice ?? 0);
+  const pricedCount = lookPrices.length + (basePrice !== null ? 1 : 0);
   const audience = outfit.gender && outfit.gender !== "unisex" ? outfit.gender : "";
 
   return (
     <section className="results container outfit" onMouseLeave={() => setActiveId(null)}>
+      {onBack && (
+        <button type="button" className="button button-ghost button-sm outfit-back" onClick={onBack}>
+          <Icon name="undo" size={15} />
+          Back to results
+        </button>
+      )}
       <div className="outfit-summary">
         {photoUrl && (
           <OutfitPhoto
             photoUrl={photoUrl}
+            alt={isLook ? baseProduct?.name || "The product" : "Your outfit photo"}
             items={items}
             activeId={activeId}
             onActivate={setActiveId}
@@ -233,12 +252,20 @@ export default function OutfitView({ outfit, photoUrl, savedIds, onToggleSave, o
         )}
 
         <div className="outfit-overview">
-          <span className="eyebrow">Find the outfit</span>
+          <span className="eyebrow">{isLook ? "Complete the look" : "Find the outfit"}</span>
+          {baseProduct && (
+            <p className="look-base">
+              Styling <strong>{baseProduct.name}</strong>
+              {basePrice !== null && ` · ${formatAmount(basePrice)}`}
+            </p>
+          )}
           {scanning ? (
             <>
-              <h2>Looking at the outfit…</h2>
+              <h2>{isLook ? "Styling the look…" : "Looking at the outfit…"}</h2>
               <p className="outfit-lead">
-                AI is spotting each item they're wearing. This usually takes a couple of seconds.
+                {isLook
+                  ? "AI is picking what goes with it. This usually takes a few seconds."
+                  : "AI is spotting each item they're wearing. This usually takes a couple of seconds."}
               </p>
               <div className="outfit-list" aria-hidden="true">
                 {Array.from({ length: 3 }, (_, index) => (
@@ -252,7 +279,7 @@ export default function OutfitView({ outfit, photoUrl, savedIds, onToggleSave, o
           ) : (
             <>
               <h2>
-                {items.length} item{items.length === 1 ? "" : "s"} spotted
+                {items.length} item{items.length === 1 ? "" : "s"} {isLook ? "that go with it" : "spotted"}
               </h2>
               <p className="outfit-lead">
                 {remaining > 0
@@ -260,13 +287,14 @@ export default function OutfitView({ outfit, photoUrl, savedIds, onToggleSave, o
                   : `Tap an item to see its options${audience ? ` for ${audience}` : ""}.`}
               </p>
 
-              {remaining === 0 && lookPrices.length > 1 && (
+              {remaining === 0 && pricedCount > 1 && (
                 <div className="outfit-total">
                   <Icon name="tag" size={18} />
                   <span>
                     Get the whole look from <strong>{formatAmount(lookTotal)}</strong>
                     <small>
-                      Cheapest option for {lookPrices.length === items.length ? "every" : `${lookPrices.length} of ${items.length}`} item
+                      {basePrice !== null ? "This item plus the cheapest option for " : "Cheapest option for "}
+                      {lookPrices.length === items.length ? "every" : `${lookPrices.length} of ${items.length}`} item
                       {lookPrices.length === items.length ? "" : "s"}
                     </small>
                   </span>

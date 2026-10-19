@@ -24,7 +24,8 @@ from image_shopping_service import (
     search_products_by_image as search_online_products,
 )
 from text_shopping_service import search_products_by_text as search_shopping_text
-from outfit_service import find_outfit
+from outfit_service import complete_the_look, find_outfit
+from assistant_service import AssistantError, ask_assistant
 from tryon_service import GARMENT_WORDS, TryOnError, product_overlay, try_on
 
 # --------------------------------------------------
@@ -911,3 +912,66 @@ async def find_outfit_stream(request: Request, file: UploadFile = File(...)):
         run=lambda emit: find_outfit(image, on_event=emit),
         shape=lambda outfit: outfit,
     )
+
+
+# --------------------------------------------------
+# Complete the look
+# --------------------------------------------------
+
+
+class LookRequest(BaseModel):
+    name: str
+
+
+@app.post("/api/v1/look/stream")
+async def complete_the_look_stream(request: Request, body: LookRequest):
+    """
+    Suggest the items that go with a product and find shopping options for
+    each, streamed like Find the outfit: "stage", "items", one "item" per
+    item, then "final" (or "error").
+    """
+    name = clean_query(body.name)
+    if not name or len(name) < 3:
+        raise HTTPException(status_code=400, detail="This product has no name to style around.")
+    cache_key = f"look:{name.lower()}"
+
+    cached = get_cached_search(cache_key)
+    if cached is None:
+        check_search_limit(request)
+
+    return stream_search_response(
+        cache_key,
+        cached,
+        first_stage="styling",
+        run=lambda emit: complete_the_look(name, on_event=emit),
+        shape=lambda look: look,
+    )
+
+
+# --------------------------------------------------
+# Shopping assistant chat
+# --------------------------------------------------
+
+# The assistant uses Groq's free tier only (no searches), with its own limit.
+ASSISTANT_LIMIT = int(os.getenv("ASSISTANT_LIMIT", "30"))
+ASSISTANT_WINDOW_SECONDS = int(os.getenv("ASSISTANT_WINDOW_SECONDS", "600"))
+_assistant_log = {}
+
+
+class AssistantRequest(BaseModel):
+    messages: list[dict]
+    products: list[dict]
+    query: str = ""
+
+
+@app.post("/api/v1/assistant")
+async def shopping_assistant(request: Request, body: AssistantRequest):
+    """Answer a question about the products on screen: {reply, picks, search}."""
+    enforce_limit(request, _assistant_log, ASSISTANT_LIMIT, ASSISTANT_WINDOW_SECONDS, "questions")
+    if not os.getenv("GROQ_API_KEY"):
+        raise HTTPException(status_code=503, detail="The assistant isn't set up on this server yet.")
+
+    try:
+        return await run_in_threadpool(ask_assistant, body.messages, body.products, body.query)
+    except AssistantError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc))

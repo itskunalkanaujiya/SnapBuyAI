@@ -38,6 +38,18 @@ and alike, as clear-lens holes or tinted areas), so the frame on the face is
 always the real product photo. Users can also use a photo, adjust size and
 position, and save a picture.
 
+**Complete the look.** Every product card has a "Complete the look" button:
+a Groq text model suggests 3-4 items that go with it (chinos and loafers
+for a shirt, a bag and a mouse for a laptop), each with a one-line reason,
+and every item is searched in parallel and shown like Find the outfit, with
+the price of the whole look.
+
+**Shopping assistant chat.** "Ask AI about these" opens a chat about the
+listings on screen. The assistant answers from their names, prices, stores,
+ratings and review counts only (in English, Hindi or Hinglish), links the
+listings it recommends and can suggest a new search. It uses Groq's free
+tier, with its own limit (ASSISTANT_LIMIT, 30 questions per 10 minutes).
+
 **Deal score, dupes and Hinglish voice search.** Every result shows how its
 price compares with the typical (median) price of that search ("Great deal ·
 30% below typical"). Photo searches add **Cheaper lookalikes**: listings at

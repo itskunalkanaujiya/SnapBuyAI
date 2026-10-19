@@ -54,7 +54,7 @@ function useLiveReady(product, enabled) {
   return live && ready;
 }
 
-export default function ProductCard({ product, isSaved, onToggleSave, onTryOn, highlight, deal }) {
+export default function ProductCard({ product, isSaved, onToggleSave, onTryOn, onCompleteLook, highlight, deal }) {
   const [imageFailed, setImageFailed] = useState(!product.image_url);
   const liveReady = useLiveReady(product, Boolean(onTryOn));
 
@@ -208,6 +208,18 @@ export default function ProductCard({ product, isSaved, onToggleSave, onTryOn, h
           <span className="button button-secondary card-cta is-disabled" aria-disabled="true">
             Link unavailable
           </span>
+        )}
+
+        {onCompleteLook && product.name && (
+          <button
+            type="button"
+            className="card-look"
+            onClick={() => onCompleteLook(product)}
+            title="AI suggests what goes with this, with shopping options"
+          >
+            <Icon name="sparkles" size={13} />
+            Complete the look
+          </button>
         )}
       </div>
     </article>

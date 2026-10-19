@@ -95,7 +95,7 @@ function Toolbar({ filters, onChange, stores, shownCount, totalCount, hasMatchSc
   );
 }
 
-function Section({ icon, title, subtitle, products, savedIds, onToggleSave, onTryOn, highlightFirst, deals, className = "" }) {
+function Section({ icon, title, subtitle, products, savedIds, onToggleSave, onTryOn, onCompleteLook, highlightFirst, deals, className = "" }) {
   if (!products.length) return null;
 
   return (
@@ -119,6 +119,7 @@ function Section({ icon, title, subtitle, products, savedIds, onToggleSave, onTr
             isSaved={savedIds.has(getProductId(product))}
             onToggleSave={onToggleSave}
             onTryOn={onTryOn}
+            onCompleteLook={onCompleteLook}
             highlight={highlightFirst && index === 0 ? highlightFirst : null}
             deal={deals?.get(getProductId(product))}
           />
@@ -217,6 +218,7 @@ export default function ResultsView({
   savedIds,
   onToggleSave,
   onTryOn,
+  onCompleteLook,
 }) {
   const [isRefining, setIsRefining] = useState(false);
 
@@ -376,6 +378,7 @@ export default function ResultsView({
             savedIds={savedIds}
             onToggleSave={onToggleSave}
             onTryOn={onTryOn}
+            onCompleteLook={onCompleteLook}
             deals={deals}
           />
           <Section
@@ -387,6 +390,7 @@ export default function ResultsView({
             savedIds={savedIds}
             onToggleSave={onToggleSave}
             onTryOn={onTryOn}
+            onCompleteLook={onCompleteLook}
           />
           <Section
             icon="tag"
@@ -400,6 +404,7 @@ export default function ResultsView({
             savedIds={savedIds}
             onToggleSave={onToggleSave}
             onTryOn={onTryOn}
+            onCompleteLook={onCompleteLook}
             deals={deals}
             highlightFirst={showBestPrice ? "Best price" : null}
           />

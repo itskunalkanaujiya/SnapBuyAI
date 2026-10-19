@@ -105,20 +105,20 @@ def looks_like_sentence(query):
     return len(words) >= 3 and any(word in FILLER_WORDS for word in words)
 
 
-def ask_model(query):
-    """The model's reading of a request, as a dict. Raises on any failure."""
+def chat_json(messages, max_tokens=600, timeout=TIMEOUT_SECONDS, temperature=0):
+    """
+    Send a chat to the first available Groq model and return its JSON reply
+    as a dict. Raises on any failure.
+    """
     for model in GROQ_MODELS:
         if model in _retired_models:
             continue
         body = {
             "model": model,
-            "temperature": 0,
-            "max_tokens": 600,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
             "response_format": {"type": "json_object"},
-            "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": query},
-            ],
+            "messages": messages,
         }
         if model.startswith("openai/gpt-oss"):
             body["reasoning_effort"] = "low"  # a reasoning model; keep it quick
@@ -126,7 +126,7 @@ def ask_model(query):
             GROQ_URL,
             headers={"Authorization": f"Bearer {os.environ['GROQ_API_KEY']}"},
             json=body,
-            timeout=TIMEOUT_SECONDS,
+            timeout=timeout,
         )
         if response.status_code == 404:
             print(f"Groq model {model} is not available; trying the next one.")
@@ -141,6 +141,14 @@ def ask_model(query):
     if not isinstance(data, dict):
         raise ValueError("model did not return an object")
     return data
+
+
+def ask_model(query):
+    """The model's reading of a request, as a dict. Raises on any failure."""
+    return chat_json([
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": query},
+    ])
 
 
 def _number(value):
