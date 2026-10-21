@@ -231,6 +231,24 @@ function PlanSummary({ outfit, total, remaining }) {
   const over = total > budget;
   const share = budget ? Math.min(100, (total / budget) * 100) : 0;
 
+  if (!budget) {
+    // A shopping list: the cart total, counting quantities.
+    const count = outfit.items.reduce((sum, item) => sum + (item.quantity || 1), 0);
+    return (
+      <div className="plan-summary">
+        <h2>{outfit.title || "Your shopping list"}</h2>
+        {remaining === 0 && (
+          <p className="plan-total">
+            <strong>{formatAmount(total)}</strong>
+            <span>
+              for {count} thing{count === 1 ? "" : "s"} on your list, best pick for each
+            </span>
+          </p>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className={`plan-summary ${over ? "is-over" : ""}`}>
       <h2>{outfit.title || "Your look"}</h2>
@@ -353,20 +371,27 @@ export default function OutfitView({ outfit, photoUrl, savedIds, onToggleSave, o
   const isRating = outfit.kind === "rating";
   const isRoom = outfit.kind === "room";
   const isPlan = outfit.kind === "plan";
+  const isGift = outfit.kind === "gift";
+  const isList = outfit.kind === "list";
+  // Plans and lists pick one listing per item and add up a total.
+  const picking = isPlan || isList;
   const baseProduct = isLook ? outfit.product : null;
   // Suggestions (a look's, a rating's or a plan's) aren't in a photo, so
   // there's nothing to crop; use each item's picked or first listing.
-  const suggested = isLook || isRating || isPlan;
+  const suggested = isLook || isRating || isPlan || isGift || isList;
   const cropped = useItemThumbnails(suggested ? "" : photoUrl, items);
   const thumbnails = suggested
     ? Object.fromEntries(
         items.map((item) => [item.id, (pickedProduct(item, outfit.picks) || itemProducts(item)[0])?.image_url])
       )
     : cropped;
-  const planTotal = isPlan
-    ? items.reduce((sum, item) => sum + (getNumericPrice(pickedProduct(item, outfit.picks) || {}) ?? 0), 0)
+  const planTotal = picking
+    ? items.reduce(
+        (sum, item) => sum + (getNumericPrice(pickedProduct(item, outfit.picks) || {}) ?? 0) * (item.quantity || 1),
+        0
+      )
     : 0;
-  const noun = isRoom ? "piece" : "item";
+  const noun = isRoom ? "piece" : isGift ? "idea" : "item";
   const [activeId, setActiveId] = useState(null);
   const basePrice = baseProduct ? getNumericPrice(baseProduct) : null;
 
@@ -407,7 +432,11 @@ export default function OutfitView({ outfit, photoUrl, savedIds, onToggleSave, o
                   ? "Shop this room"
                   : isPlan
                     ? "Budget look planner"
-                    : "Find the outfit"}
+                    : isGift
+                      ? "Gift finder"
+                      : isList
+                        ? "Your shopping list"
+                        : "Find the outfit"}
           </span>
           {baseProduct && (
             <p className="look-base">
@@ -426,7 +455,11 @@ export default function OutfitView({ outfit, photoUrl, savedIds, onToggleSave, o
                       ? "Looking around the room…"
                       : isPlan
                         ? "Planning your look…"
-                        : "Looking at the outfit…"}
+                        : isGift
+                          ? "Thinking of gifts…"
+                          : isList
+                            ? "Reading your list…"
+                            : "Looking at the outfit…"}
               </h2>
               <p className="outfit-lead">
                 {isRating
@@ -437,7 +470,11 @@ export default function OutfitView({ outfit, photoUrl, savedIds, onToggleSave, o
                       ? "AI is spotting the furniture, lighting and decor. This usually takes a few seconds."
                       : isPlan
                         ? "AI is choosing the pieces and splitting your budget between them."
-                        : "AI is spotting each item they're wearing. This usually takes a couple of seconds."}
+                        : isGift
+                          ? "AI is picking six ideas they'd love. This takes a few seconds."
+                          : isList
+                            ? "AI is reading each line and finding it in stores."
+                            : "AI is spotting each item they're wearing. This usually takes a couple of seconds."}
               </p>
               <div className="outfit-list" aria-hidden="true">
                 {Array.from({ length: 3 }, (_, index) => (
@@ -462,8 +499,10 @@ export default function OutfitView({ outfit, photoUrl, savedIds, onToggleSave, o
                     )}
                   </h3>
                 )
-              ) : isPlan ? (
+              ) : picking ? (
                 <PlanSummary outfit={outfit} total={planTotal} remaining={remaining} />
+              ) : isGift ? (
+                <h2>{outfit.title || "Gift ideas"}</h2>
               ) : (
                 <h2>
                   {items.length} {noun}
@@ -477,11 +516,15 @@ export default function OutfitView({ outfit, photoUrl, savedIds, onToggleSave, o
                     ? `Finding shopping options for ${remaining} ${noun}${remaining === 1 ? "" : "s"}…`
                     : isPlan
                       ? "Tap a piece to see its options; swap any of them and the total updates."
+                      : isList
+                        ? "Tap an item to see its options; swap any of them and the total updates."
+                        : isGift
+                          ? `Six ideas${outfit.recipient ? ` for your ${outfit.recipient}` : ""}${outfit.budget ? ` up to ${formatAmount(outfit.budget)}` : ""}. Tap one to see where to buy it.`
                       : `Tap ${isRating ? "a suggestion" : `a ${noun}`} to see its options${audience ? ` for ${audience}` : ""}.`}
                 </p>
               )}
 
-              {remaining === 0 && pricedCount > 1 && !isRating && !isPlan && (
+              {remaining === 0 && pricedCount > 1 && !isRating && !picking && !isGift && (
                 <div className="outfit-total">
                   <Icon name="tag" size={18} />
                   <span>
@@ -498,7 +541,7 @@ export default function OutfitView({ outfit, photoUrl, savedIds, onToggleSave, o
               <ol className="outfit-list">
                 {items.map((item, index) => {
                   const lowest = lowestPrice(item);
-                  const picked = isPlan ? pickedProduct(item, outfit.picks) : null;
+                  const picked = picking ? pickedProduct(item, outfit.picks) : null;
                   return (
                     <li key={item.id}>
                       <button
@@ -511,8 +554,13 @@ export default function OutfitView({ outfit, photoUrl, savedIds, onToggleSave, o
                         <span className="outfit-number">{index + 1}</span>
                         <ItemThumb src={thumbnails[item.id]} />
                         <span className="outfit-row-text">
-                          <strong>{capitalise(item.type)}</strong>
-                          <small>{capitalise(isRating ? item.reason || item.description : item.description)}</small>
+                          <strong>
+                            {capitalise(item.type)}
+                            {item.quantity > 1 && <span className="outfit-quantity">×{item.quantity}</span>}
+                          </strong>
+                          <small>
+                            {capitalise(isRating || isGift ? item.reason || item.description : item.description)}
+                          </small>
                         </span>
                         <span className="outfit-row-price">
                           {item.pending ? (
@@ -553,8 +601,8 @@ export default function OutfitView({ outfit, photoUrl, savedIds, onToggleSave, o
           onTryOn={onTryOn}
           onMore={onMore}
           onExactMatch={onExactMatch}
-          pickKey={isPlan ? outfit.picks?.[item.id] : undefined}
-          onPick={isPlan ? onPick : undefined}
+          pickKey={picking ? outfit.picks?.[item.id] : undefined}
+          onPick={picking ? onPick : undefined}
         />
       ))}
     </section>

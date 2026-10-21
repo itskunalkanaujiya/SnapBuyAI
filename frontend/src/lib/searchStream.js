@@ -146,3 +146,31 @@ export async function streamPlan({ request, budget, gender }, onEvent) {
 
   await readEventStream(response, onEvent);
 }
+
+/** Gift finder: six gift ideas with listings, streamed like an outfit. */
+export async function streamGifts({ request, budget }, onEvent) {
+  const response = await fetch(`${API_URL}/api/v1/gifts/stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ request, budget: budget || null }),
+  });
+
+  await readEventStream(response, onEvent);
+}
+
+/**
+ * Shop a whole list: a photo of it (file) or typed text. Streams "list",
+ * then one "item" per line; "final" adds the picks and the cart total.
+ */
+export async function streamList({ file, text }, onEvent) {
+  const formData = new FormData();
+  if (file) formData.append("file", file);
+  else formData.append("text", text);
+
+  const response = await fetch(`${API_URL}/api/v1/list/stream`, {
+    method: "POST",
+    body: formData,
+  });
+
+  await readEventStream(response, onEvent);
+}

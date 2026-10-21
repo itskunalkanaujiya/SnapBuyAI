@@ -29,6 +29,9 @@ from style_service import analyse_colours, rate_outfit
 from assistant_service import AssistantError, ask_assistant, compare_products
 from room_service import find_room
 from planner_service import PlanError, plan_look, read_budget
+from gift_service import find_gifts
+from list_service import shop_list
+from price_watch_service import PriceWatchError, check_prices
 from tryon_service import GARMENT_WORDS, TryOnError, product_overlay, try_on
 
 # --------------------------------------------------
@@ -1130,3 +1133,110 @@ def read_budget_or_400(text, budget):
     if len(text) < 3:
         raise PlanError("Describe the look you want, e.g. \"wedding outfit for men under ₹5,000\".")
     return read_budget(text, budget)
+
+
+# --------------------------------------------------
+# Gift finder
+# --------------------------------------------------
+
+
+class GiftRequest(BaseModel):
+    request: str
+    budget: float | None = None
+
+
+@app.post("/api/v1/gifts/stream")
+async def gift_finder_stream(request: Request, body: GiftRequest):
+    """
+    Six gift ideas with listings, streamed: "stage", "gifts" (title,
+    recipient, budget), "items", one "item" per idea, then "final".
+    """
+    text = clean_query(body.request) or ""
+    if len(text) < 3:
+        raise HTTPException(status_code=400, detail="Say who the gift is for, e.g. \"brother who loves the gym\".")
+    cache_key = f"gifts:{text.lower()}:{body.budget or ''}"
+
+    cached = get_cached_search(cache_key)
+    if cached is None:
+        check_search_limit(request)
+
+    return stream_search_response(
+        cache_key,
+        cached,
+        first_stage="thinking",
+        run=lambda emit: find_gifts(text, body.budget, on_event=emit),
+        shape=lambda gifts: gifts,
+    )
+
+
+# --------------------------------------------------
+# Snap your shopping list
+# --------------------------------------------------
+
+MAX_LIST_TEXT = 2000
+
+
+@app.post("/api/v1/list/stream")
+async def shopping_list_stream(
+    request: Request,
+    file: UploadFile | None = File(default=None),
+    text: str | None = Form(default=None),
+):
+    """
+    Read a shopping list (a photo in `file`, or typed `text`) and shop every
+    line, streamed: "stage", "list" (title), "items", one "item" per line,
+    then "final" with the picked listing per line and the cart "total".
+    """
+    if file is not None:
+        image = await read_uploaded_image(file)
+        fingerprint = await run_in_threadpool(image_fingerprint, image)
+        cache_key = f"list:{fingerprint}"
+        run = lambda emit: shop_list(image=image, on_event=emit)  # noqa: E731
+    else:
+        typed = " ".join((text or "").split())[:MAX_LIST_TEXT]
+        if len(typed) < 3:
+            raise HTTPException(status_code=400, detail="Write or photograph a shopping list first.")
+        cache_key = f"list-text:{typed.lower()}"
+        run = lambda emit: shop_list(text=typed, on_event=emit)  # noqa: E731
+
+    cached = get_cached_search(cache_key)
+    if cached is None:
+        check_search_limit(request)
+
+    return stream_search_response(
+        cache_key,
+        cached,
+        first_stage="reading",
+        run=run,
+        shape=lambda shopped: shopped,
+    )
+
+
+# --------------------------------------------------
+# Price watch
+# --------------------------------------------------
+
+# Each check reads store pages and may use a Google Shopping search per
+# product, so visitors get a few checks an hour.
+WATCH_LIMIT = int(os.getenv("WATCH_LIMIT", "6"))
+WATCH_WINDOW_SECONDS = int(os.getenv("WATCH_WINDOW_SECONDS", "3600"))
+_watch_log = {}
+
+
+class PriceCheckRequest(BaseModel):
+    items: list[dict]
+
+
+@app.post("/api/v1/prices/check")
+async def check_watched_prices(request: Request, body: PriceCheckRequest):
+    """
+    Current prices of watched products: {"results": [{"id", "price",
+    "original_price", "availability", "source", "status"}]}, status being
+    "down", "up", "same" or "unknown" against the price sent.
+    """
+    enforce_limit(request, _watch_log, WATCH_LIMIT, WATCH_WINDOW_SECONDS, "price checks")
+    try:
+        results = await run_in_threadpool(check_prices, body.items)
+    except PriceWatchError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"results": results}

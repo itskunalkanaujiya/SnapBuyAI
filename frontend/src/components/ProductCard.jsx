@@ -4,10 +4,12 @@ import { canTryOn } from "../lib/tryon.js";
 import { canTryOnAccessory, loadOverlay } from "../lib/accessoryTryOn.js";
 import { usePalette } from "../lib/palette.js";
 import { useCompare } from "../lib/compare.js";
+import { usePriceWatch } from "../lib/priceWatch.js";
 import {
   AVAILABILITY_LABELS,
   formatAmount,
   formatPrice,
+  getNumericPrice,
   getAvailability,
   getMatchLevel,
 } from "../lib/products.js";
@@ -65,6 +67,9 @@ export default function ProductCard({ product, isSaved, onToggleSave, onTryOn, o
   const accessoryReady = useAccessoryReady(product, Boolean(onTryOn));
   const suits = usePalette()?.suitsYou(product);
   const compare = useCompare();
+  const watch = usePriceWatch();
+  const watching = watch?.isWatching(product) ?? false;
+  const canWatch = watch && getNumericPrice(product) !== null && product.product_url;
   const comparing = compare?.isSelected(product) ?? false;
 
   const match = getMatchLevel(product);
@@ -135,6 +140,26 @@ export default function ProductCard({ product, isSaved, onToggleSave, onTryOn, o
           >
             <Icon name="shirt" size={14} />
             Try on
+          </button>
+        )}
+
+        {canWatch && (
+          <button
+            type="button"
+            className={`watch-button ${watching ? "is-watching" : ""}`}
+            onClick={() => watch.toggle(product)}
+            aria-pressed={watching}
+            disabled={!watching && watch.isFull}
+            aria-label={watching ? "Stop watching the price" : "Watch the price"}
+            title={
+              watching
+                ? "Watching the price: you'll see it here when it drops"
+                : watch.isFull
+                  ? "You're watching the most products allowed (20)"
+                  : "Watch the price and get told when it drops"
+            }
+          >
+            <Icon name="bell" size={16} />
           </button>
         )}
 

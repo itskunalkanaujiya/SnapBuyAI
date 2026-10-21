@@ -98,6 +98,7 @@ export default function UploadPanel({
   onFindOutfit,
   onRateOutfit,
   onShopRoom,
+  onShopList,
   isFindingOutfit = false,
   busyKind = null,
 }) {
@@ -349,6 +350,26 @@ export default function UploadPanel({
             <>
               <Icon name="box" size={17} />
               Shop this room
+            </>
+          )}
+        </button>
+
+        <button
+          type="button"
+          className="button button-secondary search-button list-button"
+          onClick={onShopList}
+          disabled={!file || isSearching || isFindingOutfit}
+          title="Read a handwritten list or a chat screenshot and find every item"
+        >
+          {isFindingOutfit && busyKind === "list" ? (
+            <>
+              <span className="spinner" />
+              Reading the list…
+            </>
+          ) : (
+            <>
+              <Icon name="bag" size={17} />
+              Shop my list
               <span className="new-pill">New</span>
             </>
           )}

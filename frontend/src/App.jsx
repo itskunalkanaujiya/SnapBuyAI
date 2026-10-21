@@ -22,6 +22,8 @@ import {
 } from "./lib/history.js";
 import { cropToFile, prepareForUpload } from "./lib/resizeImage.js";
 import {
+  streamGifts,
+  streamList,
   streamLook,
   streamOutfit,
   streamPlan,
@@ -32,6 +34,20 @@ import {
 } from "./lib/searchStream.js";
 import CompareDialog, { CompareBar } from "./components/CompareDialog.jsx";
 import PlanPanel from "./components/PlanPanel.jsx";
+import GiftPanel from "./components/GiftPanel.jsx";
+import PriceWatch from "./components/PriceWatch.jsx";
+import {
+  MAX_WATCHES,
+  PriceWatchContext,
+  applyResults,
+  askToNotify,
+  checkWatches,
+  dueWatches,
+  newWatch,
+  notifyDrops,
+  readWatches,
+  writeWatches,
+} from "./lib/priceWatch.js";
 import { CompareContext, MAX_COMPARE } from "./lib/compare.js";
 import AssistantChat from "./components/AssistantChat.jsx";
 import ColoursDialog from "./components/ColoursDialog.jsx";
@@ -40,6 +56,7 @@ import {
   ALLOWED_IMAGE_TYPES,
   DEFAULT_FILTERS,
   MAX_IMAGE_SIZE,
+  formatAmount,
   getNumericPrice,
   getProductId,
 } from "./lib/products.js";
@@ -62,8 +79,9 @@ const WAYS = [
   { mode: "photo", icon: "camera", label: "Photo search" },
   { mode: "text", icon: "search", label: "Describe it" },
   { mode: "outfit", icon: "shirt", label: "Find the outfit" },
-  { mode: "plan", icon: "tag", label: "Plan on a budget", isNew: true },
-  { mode: "room", icon: "box", label: "Shop a room", isNew: true },
+  { mode: "plan", icon: "tag", label: "Plan on a budget" },
+  { mode: "gift", icon: "heart", label: "Find a gift", isNew: true },
+  { mode: "room", icon: "box", label: "Shop a room" },
   { mode: "tryon", icon: "sparkles", label: "Try it on" },
 ];
 
@@ -147,6 +165,31 @@ export default function App() {
   // "Colours that suit you": the palette from a selfie, kept in this browser.
   const [palette, setPalette] = useState(readPalette);
   const [showColours, setShowColours] = useState(false);
+  // Price watch: watched products (kept in this browser), the latest drops
+  // and whether a check is running.
+  const [watches, setWatches] = useState(readWatches);
+  const [drops, setDrops] = useState([]);
+  const [isCheckingPrices, setIsCheckingPrices] = useState(false);
+  const [watchError, setWatchError] = useState("");
+  const watchValue = useMemo(() => {
+    const ids = new Set(watches.map((watch) => watch.id));
+    return {
+      isWatching: (product) => ids.has(getProductId(product)),
+      isFull: watches.length >= MAX_WATCHES,
+      toggle: (product) => {
+        const id = getProductId(product);
+        if (!ids.has(id)) askToNotify();
+        setWatches((current) =>
+          current.some((watch) => watch.id === id)
+            ? current.filter((watch) => watch.id !== id)
+            : current.length < MAX_WATCHES
+              ? [...current, newWatch(product)]
+              : current
+        );
+      },
+    };
+  }, [watches]);
+
   // Products picked to compare, and the ones being compared in the dialog.
   const [compareList, setCompareList] = useState([]);
   const [comparing, setComparing] = useState(null);
@@ -222,6 +265,39 @@ export default function App() {
   useEffect(() => {
     writeHistory(history);
   }, [history]);
+
+  useEffect(() => {
+    writeWatches(watches);
+  }, [watches]);
+
+  // Re-check watched prices: those due (every 12 hours) when the app opens,
+  // or all of them from "Check now".
+  const checkPrices = useCallback(async (all) => {
+    const current = readWatches();
+    const toCheck = all ? current : dueWatches(current);
+    if (!toCheck.length) return;
+    setIsCheckingPrices(true);
+    setWatchError("");
+    try {
+      const results = await checkWatches(toCheck);
+      const { watches: updated, drops: found } = applyResults(readWatches(), results);
+      setWatches(updated);
+      if (found.length) {
+        setDrops(found);
+        notifyDrops(found);
+      }
+    } catch (checkError) {
+      if (all) setWatchError(checkError instanceof TypeError ? "Can't reach the SnapBuy server." : checkError.message);
+    } finally {
+      setIsCheckingPrices(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    // Once, shortly after the app opens.
+    const timer = setTimeout(() => checkPrices(false), 1500);
+    return () => clearTimeout(timer);
+  }, [checkPrices]);
 
   // Drive the progress steps while a search is running.
   useEffect(() => {
@@ -404,7 +480,7 @@ export default function App() {
       searchText("Cotton kurti for women");
       return;
     }
-    if (nextMode === "plan" || nextMode === "text") {
+    if (nextMode === "plan" || nextMode === "text" || nextMode === "gift") {
       changeMode(nextMode);
     } else if (nextMode === "photo" || nextMode === "outfit" || nextMode === "room") {
       changeMode("photo");
@@ -417,6 +493,8 @@ export default function App() {
           ? `.${nextMode === "room" ? "room" : "outfit"}-button`
           : nextMode === "plan"
             ? "#plan-request"
+            : nextMode === "gift"
+              ? "#gift-about"
             : ".dropzone, .text-search-field input, .search-button";
       panelRef.current?.querySelector(target)?.focus({ preventScroll: true });
     });
@@ -545,6 +623,32 @@ export default function App() {
     );
   }
 
+  // Six gift ideas with listings: { request, budget }.
+  async function findGifts(gift) {
+    setReturnTo(null);
+    await streamItems(
+      { kind: "gift", title: "", recipient: "", budget: gift.budget || 0, gender: "", items: [], photoUrl: "" },
+      (onEvent) => streamGifts(gift, onEvent),
+      "Couldn't find gift ideas. Please try again."
+    );
+  }
+
+  // Shop a whole list: a photo of it (the uploaded photo) or typed text.
+  async function shopList(list) {
+    const fromPhoto = !list?.text;
+    if (fromPhoto && !file) {
+      setError("Please upload a photo of your list first.");
+      return;
+    }
+    setReturnTo(null);
+    await streamItems(
+      { kind: "list", title: "", picks: {}, gender: "", items: [], photoUrl: fromPhoto ? URL.createObjectURL(file) : "" },
+      async (onEvent) =>
+        streamList(fromPhoto ? { file: await prepareForUpload(file) } : { text: list.text }, onEvent),
+      "Couldn't shop this list. Please try again."
+    );
+  }
+
   // Plan a whole look within a budget: { request, budget, gender }.
   async function planLook(plan) {
     setReturnTo(null);
@@ -656,6 +760,12 @@ export default function App() {
           case "plan":
             setOutfit((current) => ({ ...current, title: event.title, budget: event.budget, gender: event.gender }));
             break;
+          case "gifts":
+            setOutfit((current) => ({ ...current, title: event.title, recipient: event.recipient, budget: event.budget }));
+            break;
+          case "list":
+            setOutfit((current) => ({ ...current, title: event.title }));
+            break;
           case "items":
             setOutfit((current) => ({
               ...current,
@@ -676,6 +786,7 @@ export default function App() {
               title: event.title ?? current.title,
               budget: event.budget ?? current.budget,
               picks: event.picks ?? current.picks,
+              recipient: event.recipient ?? current.recipient,
               gender: event.gender,
               items: event.items.map((item) => ({ ...item, pending: false })),
             }));
@@ -763,6 +874,7 @@ export default function App() {
   return (
     <PaletteContext.Provider value={paletteValue}>
     <CompareContext.Provider value={compareValue}>
+    <PriceWatchContext.Provider value={watchValue}>
     <div className="app">
       <header className="site-header">
         <div className="container header-inner">
@@ -812,6 +924,37 @@ export default function App() {
       </header>
 
       <main>
+        {drops.length > 0 && (
+          <div className="container">
+            <div className="drop-banner" role="status">
+              <Icon name="trendDown" size={20} />
+              <p>
+                <strong>
+                  {drops.length === 1
+                    ? `Price drop: ${drops[0].watch.product.name}`
+                    : `${drops.length} products you're watching got cheaper`}
+                </strong>
+                {" — "}
+                {drops.length === 1
+                  ? `now ${formatAmount(drops[0].watch.lastPrice)}, ${formatAmount(drops[0].saved)} less.`
+                  : `save up to ${formatAmount(Math.max(...drops.map((drop) => drop.saved)))}.`}
+              </p>
+              <button
+                type="button"
+                className="button button-secondary button-sm"
+                onClick={() => {
+                  setView("saved");
+                  setDrops([]);
+                }}
+              >
+                See them
+              </button>
+              <button type="button" className="icon-button" onClick={() => setDrops([])} aria-label="Dismiss">
+                <Icon name="x" size={16} />
+              </button>
+            </div>
+          </div>
+        )}
         {view === "discover" ? (
           <>
             <section className="hero">
@@ -894,8 +1037,16 @@ export default function App() {
                     onFindOutfit={findOutfit}
                     onRateOutfit={rateOutfit}
                     onShopRoom={shopRoom}
+                    onShopList={() => shopList()}
                     isFindingOutfit={isFindingOutfit}
                     busyKind={isFindingOutfit ? outfit?.kind : null}
+                  />
+                ) : mode === "gift" ? (
+                  <GiftPanel
+                    modeTabs={modeTabs}
+                    onFind={findGifts}
+                    isFinding={isFindingOutfit && outfit?.kind === "gift"}
+                    error={error}
                   />
                 ) : mode === "plan" ? (
                   <PlanPanel
@@ -912,6 +1063,8 @@ export default function App() {
                     onSearch={searchText}
                     isSearching={isSearching}
                     error={error}
+                    onShopList={shopList}
+                    isShoppingList={isFindingOutfit && outfit?.kind === "list"}
                   />
                 )}
                 <SearchQuota refreshKey={isSearching} />
@@ -997,8 +1150,22 @@ export default function App() {
             <div className="saved-header">
               <div>
                 <span className="eyebrow">Your collection</span>
-                <h2>Saved items</h2>
-                <p>Saved in this browser so you can compare them later.</p>
+                <h2>Saved and watched</h2>
+                <p>Kept in this browser: products you've saved, and prices you're watching.</p>
+              </div>
+            </div>
+
+            <PriceWatch
+              watches={watches}
+              onCheck={() => checkPrices(true)}
+              isChecking={isCheckingPrices}
+              onRemove={(id) => setWatches((current) => current.filter((watch) => watch.id !== id))}
+              error={watchError}
+            />
+
+            <div className="saved-header">
+              <div>
+                <h3>Saved items</h3>
               </div>
 
               {saved.length > 0 && (
@@ -1080,6 +1247,7 @@ export default function App() {
         onClear={() => setCompareList([])}
       />
     </div>
+    </PriceWatchContext.Provider>
     </CompareContext.Provider>
     </PaletteContext.Provider>
   );

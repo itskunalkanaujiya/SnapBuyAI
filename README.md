@@ -36,6 +36,30 @@ usable: a plain background and, for glasses, a front view (both lenses found
 and alike, as clear-lens holes or tinted areas), so the frame on the face is
 always the real product photo.
 
+**Gift finder.** The "Gift" tab: who it's for, the occasion, what they like
+and a budget, in any words ("bhai ke liye, gym ka shauk, 2000 tak"). A Groq
+model suggests six varied ideas, each with a reason; each is searched and
+checked by the listing judge, and listings well over the budget are left out
+(`backend/gift_service.py`).
+
+**Shop my list.** A photo of a handwritten list or a chat screenshot ("Shop
+my list" under Photo), or a typed list ("Have a whole list?" under Text). The
+vision model (or, for typed lists, a language model) reads each line into an
+English search with its quantity and any budget, in Hindi or Hinglish too;
+each line is searched and checked, the best listing at about the typical
+price is picked per line (within a written budget when there is one) and the
+cart total counts quantities (`backend/list_service.py`).
+
+**Price watch.** The bell on a card watches its price; the watch list lives
+in the browser (no account). When the app opens, watches older than 12 hours
+are re-checked (`/api/v1/prices/check`, `backend/price_watch_service.py`):
+from the store page when the link is one, else the same store's Google
+Shopping listing whose title matches closely (the nearest price among
+near-identical listings; a jump of over 60% counts as a different product,
+not a drop). Drops show a banner and, with permission, a browser
+notification; the Saved page lists every watch with its history. Alerts
+appear when the app is opened, not while it's closed.
+
 **Budget look planner.** The "Plan" tab: an occasion ("wedding guest
 outfit"), who it's for and a total budget (or a budget in the sentence, "2k
 tak"). A Groq model plans 3-5 pieces and splits the budget between them

@@ -21,6 +21,7 @@ def reset_server_state():
     main._overlay_cache.clear()
     main._assistant_log.clear()
     main._style_log.clear()
+    main._watch_log.clear()
     yield
     main._search_cache.clear()
     main._search_log.clear()

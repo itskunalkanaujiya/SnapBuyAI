@@ -24,6 +24,9 @@ What a shopper can do:
 | Plan on a budget | "Wedding guest outfit, men, ₹5,000" → a whole look, one pick per piece, total within budget |
 | Shop this room | One room photo → every piece of furniture and decor, each with listings |
 | Compare | Tick 2–3 products for a side-by-side table, features read by AI, and a verdict |
+| Find a gift | "Bhai ke liye, gym ka shauk, 2000 tak" → six gift ideas with listings |
+| Shop my list | A photo of a handwritten list (or a typed one) → every item found, one cart total |
+| Price watch | Tap the bell on a product; drops show as a banner and browser notification |
 | Ask AI | A chat that compares the listings on screen and recommends one |
 | Try on | Clothes on your photo (AI, Hugging Face); glasses and watches placed on your face or wrist photo |
 | Saved and recent | Wishlist and recent searches, kept in the browser |
@@ -68,7 +71,7 @@ The app is two parts: a React single-page app and a Python FastAPI service, both
 | Search providers | Serper.dev, SerpApi, SearchApi.io | Google Shopping and Google Lens results |
 | Temporary image hosting | Vercel Blob | Gives Google Lens a public URL for the uploaded photo |
 | Hosting | Vercel (two projects) | Static frontend + Python serverless backend |
-| Quality | pytest, ESLint, GitHub Actions | 264 backend tests, linting, CI on every backend push |
+| Quality | pytest, ESLint, GitHub Actions | 280 backend tests, linting, CI on every backend push |
 
 ## Project structure
 
@@ -90,10 +93,13 @@ SnapBuyAI/
 │   ├── style_service.py           Rate my outfit + Colours that suit you
 │   ├── room_service.py            Shop this room
 │   ├── planner_service.py         Budget look planner: plan, budget split, picks
+│   ├── gift_service.py            Gift finder
+│   ├── list_service.py            Shop my list (photo or typed)
+│   ├── price_watch_service.py     Re-checks watched prices
 │   ├── listing_judge.py           AI check that a suggestion's listings are the right item
 │   ├── assistant_service.py       "Ask AI" chat about the listings on screen
 │   ├── tryon_service.py           Clothes try-on (Hugging Face) + glasses/watch cut-outs
-│   ├── tests/                     264 pytest tests (no network: providers are faked)
+│   ├── tests/                     280 pytest tests (no network: providers are faked)
 │   ├── requirements.txt           Python dependencies (pyproject.toml for Vercel's build)
 │   ├── vercel.json, .vercelignore Serverless settings; keeps .env and tests out of deploys
 │   └── .env.example               Names of every setting (copy to .env and fill in)
@@ -111,6 +117,8 @@ SnapBuyAI/
         │   ├── OutfitView.jsx          Outfit, look and rating screens
         │   ├── AssistantChat.jsx       "Ask AI about these" chat panel
         │   ├── PlanPanel.jsx           Budget look planner form (the "Plan" tab)
+        │   ├── GiftPanel.jsx           Gift finder form (the "Gift" tab)
+        │   ├── PriceWatch.jsx          Price watch list on the Saved page
         │   ├── CompareDialog.jsx       Compare bar and side-by-side dialog
         │   ├── ColoursDialog.jsx       Colours that suit you
         │   ├── TryOnDialog.jsx         Clothes try-on (before/after)
@@ -196,6 +204,18 @@ The "Plan" tab takes an occasion, who it's for and a total budget (or a budget i
 3. One listing is picked per piece; while the total is over budget, the piece with the most to save steps down to a cheaper option.
 4. The user can swap any piece ("Use in my look"); the total and the budget bar update. Code: `planner_service.py`, `PlanPanel.jsx`.
 
+### Find a gift
+
+The "Gift" tab: chips for who it's for and the occasion, what they like and a budget (Hindi and Hinglish work). A Groq model suggests six varied ideas with a reason each; each is searched, checked by the listing judge, and listings well over the budget are dropped. Code: `gift_service.py`, `GiftPanel.jsx`.
+
+### Shop my list
+
+A photo of a handwritten list or chat screenshot ("Shop my list" under Photo), or a typed list ("Have a whole list?" under Text). AI reads each line into an English search with quantity and any written budget; each is searched and checked; the best listing at about the typical price is picked per line and the cart total counts quantities. Code: `list_service.py`.
+
+### Price watch
+
+The bell on a card adds it to a watch list kept in the browser. When the app opens, watches older than 12 hours are re-checked: from the store page, or the same store's closely matching Google Shopping listing (a jump over 60% is treated as a different product, not a drop). Drops show a banner and a browser notification; the Saved page shows each watch's history. Alerts appear when the app is opened, not while it is closed. Code: `price_watch_service.py`, `priceWatch.js`, `PriceWatch.jsx`.
+
 ### Shop this room
 
 Like Find the outfit, for a room photo: the vision model lists up to 8 pieces of furniture, lighting and decor with boxes; each is searched and re-ranked against its crop, with the price of the whole room. Code: `room_service.py`.
@@ -238,6 +258,7 @@ The home page shows the searches left (`/api/v1/usage`).
 | `TRYON_LIMIT` / `TRYON_WINDOW_SECONDS` | 5 per 600 s | Clothes try-ons |
 | `ASSISTANT_LIMIT` | 30 per 600 s | Ask AI questions |
 | `STYLE_LIMIT` | 10 per 600 s | Colour checks |
+| `WATCH_LIMIT` / `WATCH_WINDOW_SECONDS` | 6 per 3600 s | Price-watch checks (each may use a Google Shopping search per product) |
 
 Repeated searches are served from an in-memory cache and cost nothing.
 
@@ -262,6 +283,9 @@ All routes are under the backend URL (`http://127.0.0.1:8000` locally). Interact
 | POST | `/api/v1/compare` | JSON `{products (2–3), query}` | `{attributes, pros, best, verdict}` |
 | POST | `/api/v1/room/stream` | `file` (room photo) | Streams `items`, one `item` per piece, `final` with `style` |
 | POST | `/api/v1/plan/stream` | JSON `{request, budget?, gender?}` | Streams `plan`, `items`, `item`, `final` with `picks` and `total` |
+| POST | `/api/v1/gifts/stream` | JSON `{request, budget?}` | Streams `gifts`, `items`, `item`, `final` |
+| POST | `/api/v1/list/stream` | `file` (photo of a list) or `text` | Streams `list`, `items`, `item`, `final` with `picks` and `total` |
+| POST | `/api/v1/prices/check` | JSON `{items: [{id, name, product_url, marketplace, price}]}` | `{results: [{id, price, status}]}`, status down/up/same/unknown |
 | POST | `/api/v1/tryon` | Person photo + garment | Try-on image (JPEG) |
 | GET | `/api/v1/tryon/overlay` | `url`, `category` (`glasses`/`watch`) | Cut-out PNG; lens centres in `X-Lens-Centres` |
 
@@ -308,7 +332,7 @@ Run all three checks before every push; they take under a minute together.
 
 | Check | Command | What it covers |
 | --- | --- | --- |
-| Backend tests | `cd backend && pip install -r requirements-dev.txt && pytest -q` | 264 tests: ranking, prices, Hinglish parsing, outfit, rating, colours, judge, API routes |
+| Backend tests | `cd backend && pip install -r requirements-dev.txt && pytest -q` | 280 tests: ranking, prices, Hinglish parsing, outfit, rating, colours, judge, API routes |
 | Lint | `cd frontend && npx eslint src` | React and hooks rules |
 | Build | `cd frontend && npx vite build` | The production bundle compiles |
 
