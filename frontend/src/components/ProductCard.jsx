@@ -3,6 +3,7 @@ import Icon from "./Icon.jsx";
 import { canTryOn } from "../lib/tryon.js";
 import { canTryOnAccessory, loadOverlay } from "../lib/accessoryTryOn.js";
 import { usePalette } from "../lib/palette.js";
+import { useCompare } from "../lib/compare.js";
 import {
   AVAILABILITY_LABELS,
   formatAmount,
@@ -58,10 +59,13 @@ function useAccessoryReady(product, enabled) {
 
 const DEAL_ICONS = { high: "alert", fake: "alert", real: "check" };
 
-export default function ProductCard({ product, isSaved, onToggleSave, onTryOn, onCompleteLook, highlight, deal }) {
+// pick: { picked, onPick } on a Budget look planner piece's listings.
+export default function ProductCard({ product, isSaved, onToggleSave, onTryOn, onCompleteLook, highlight, deal, pick }) {
   const [imageFailed, setImageFailed] = useState(!product.image_url);
   const accessoryReady = useAccessoryReady(product, Boolean(onTryOn));
   const suits = usePalette()?.suitsYou(product);
+  const compare = useCompare();
+  const comparing = compare?.isSelected(product) ?? false;
 
   const match = getMatchLevel(product);
   const availability = getAvailability(product);
@@ -72,7 +76,7 @@ export default function ProductCard({ product, isSaved, onToggleSave, onTryOn, o
   const isShopping = product.result_type === "shopping";
 
   return (
-    <article className="card">
+    <article className={`card ${pick?.picked ? "is-picked" : ""}`}>
       <div className="card-media">
         {imageFailed ? (
           <div className="card-media-fallback" role="img" aria-label="Image unavailable">
@@ -88,6 +92,12 @@ export default function ProductCard({ product, isSaved, onToggleSave, onTryOn, o
         )}
 
         <div className="card-badges">
+          {pick?.picked && (
+            <span className="badge badge-accent">
+              <Icon name="check" size={12} />
+              In your look
+            </span>
+          )}
           {product.condition && (
             <span className="badge badge-condition">
               {product.condition === "used" ? "Used" : "Refurbished"}
@@ -219,6 +229,25 @@ export default function ProductCard({ product, isSaved, onToggleSave, onTryOn, o
           <span className="button button-secondary card-cta is-disabled" aria-disabled="true">
             Link unavailable
           </span>
+        )}
+
+        {pick && !pick.picked && (
+          <button type="button" className="button button-ghost button-sm card-pick" onClick={pick.onPick}>
+            <Icon name="check" size={14} />
+            Use in my look
+          </button>
+        )}
+
+        {compare && (
+          <label className={`card-compare ${comparing ? "is-checked" : ""}`}>
+            <input
+              type="checkbox"
+              checked={comparing}
+              disabled={!comparing && compare.isFull}
+              onChange={() => compare.toggle(product)}
+            />
+            {comparing ? "Comparing" : compare.isFull ? "Compare (3 max)" : "Compare"}
+          </label>
         )}
 
         {onCompleteLook && product.name && (

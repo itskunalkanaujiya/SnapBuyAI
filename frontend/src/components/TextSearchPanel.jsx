@@ -11,11 +11,12 @@ const EXAMPLES = [
   "Cotton kurti for women",
 ];
 
-/** Photo / Text switch shown at the top of both search panels. */
+/** Photo / Text / Plan switch shown at the top of every search panel. */
 export function SearchModeTabs({ mode, onChange, disabled }) {
   const tabs = [
     { key: "photo", label: "Photo", icon: "camera" },
     { key: "text", label: "Text", icon: "search" },
+    { key: "plan", label: "Plan", icon: "tag" },
   ];
 
   return (

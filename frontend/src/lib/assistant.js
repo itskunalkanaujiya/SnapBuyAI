@@ -38,3 +38,27 @@ export async function askAssistant(messages, products, query) {
   }
   return body;
 }
+
+/**
+ * Compare 2-3 products side by side.
+ * Returns { attributes: [{ name, values }], pros: [[...]], best, verdict }.
+ */
+export async function compareProducts(products, query) {
+  const response = await fetch(`${API_URL}/api/v1/compare`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ products: products.map(brief), query: query || "" }),
+  });
+
+  let body = null;
+  try {
+    body = await response.json();
+  } catch {
+    // Handled below.
+  }
+  if (!response.ok || !body) {
+    const detail = body?.detail;
+    throw new Error(typeof detail === "string" ? detail : "Couldn't compare these products. Please try again.");
+  }
+  return body;
+}

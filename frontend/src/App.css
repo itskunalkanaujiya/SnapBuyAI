@@ -856,7 +856,8 @@ kbd {
   border-radius: var(--radius);
   background: var(--surface-sunken);
   gap: 4px;
-  grid-template-columns: 1fr 1fr;
+  grid-auto-columns: 1fr;
+  grid-auto-flow: column;
 }
 
 .mode-tab {
@@ -5386,4 +5387,421 @@ a.chat-pick:hover {
   .rating-areas {
     grid-template-columns: 1fr;
   }
+}
+
+/* ---------- Shop this room ---------- */
+
+.outfit-actions .room-button {
+  grid-column: 1 / -1;
+}
+
+/* ---------- Compare ---------- */
+
+.card-compare {
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
+  margin-top: 6px;
+  color: var(--text-2);
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 600;
+  gap: 6px;
+}
+
+.card-compare input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+.card-compare.is-checked {
+  color: var(--primary-text);
+}
+
+.compare-bar {
+  position: fixed;
+  z-index: 55;
+  bottom: 20px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  max-width: calc(100vw - 32px);
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+  gap: 10px;
+  transform: translateX(-50%);
+  animation: chat-pop 0.25s var(--ease) both;
+}
+
+.compare-bar-items {
+  display: flex;
+  overflow: hidden;
+  min-width: 0;
+  gap: 6px;
+}
+
+.compare-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 190px;
+  padding: 3px 4px 3px 3px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  gap: 6px;
+}
+
+.compare-chip img {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 50%;
+  background: #ffffff;
+  object-fit: contain;
+}
+
+.compare-chip-name {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compare-chip button {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  place-items: center;
+}
+
+.compare-chip button:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+.compare-bar-hint {
+  color: var(--text-3);
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.compare-modal {
+  width: min(960px, 100%);
+}
+
+.compare-body {
+  overflow-y: auto;
+  max-height: calc(100vh - 180px);
+  padding: 18px 24px 24px;
+}
+
+.compare-verdict {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 18px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, var(--primary-soft), transparent 70%);
+  gap: 12px;
+}
+
+.compare-verdict p {
+  margin: 4px 0 0;
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.compare-loading {
+  display: flex;
+  align-items: center;
+  margin: 0 0 18px;
+  color: var(--text-2);
+  gap: 10px;
+}
+
+.compare-table {
+  display: grid;
+}
+
+.compare-row {
+  display: grid;
+  align-items: start;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font-size: 14px;
+  gap: 16px;
+}
+
+.compare-row > [role="rowheader"] {
+  color: var(--text-3);
+  font-size: 12.5px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+}
+
+.compare-head {
+  align-items: end;
+  border-bottom: 0;
+}
+
+.compare-product {
+  position: relative;
+  display: grid;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  gap: 8px;
+}
+
+.compare-product.is-best {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-soft);
+}
+
+.compare-product img,
+.compare-noimage {
+  display: grid;
+  width: 100%;
+  height: 130px;
+  border-radius: var(--radius-sm);
+  background: #ffffff;
+  color: var(--text-3);
+  object-fit: contain;
+  place-items: center;
+}
+
+.compare-product strong {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 13.5px;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.compare-best {
+  position: absolute;
+  z-index: 1;
+  top: 8px;
+  left: 8px;
+}
+
+.compare-price {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.compare-muted {
+  color: var(--text-3);
+}
+
+.compare-pros {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  gap: 6px;
+  list-style: none;
+}
+
+.compare-pros li {
+  display: flex;
+  align-items: flex-start;
+  color: var(--text);
+  font-size: 13px;
+  gap: 6px;
+}
+
+.compare-pros .icon {
+  flex: none;
+  margin-top: 2px;
+  color: var(--success);
+}
+
+/* ---------- Budget look planner ---------- */
+
+.plan-panel form {
+  display: grid;
+  gap: 12px;
+}
+
+.plan-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.plan-input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+}
+
+.plan-input:focus {
+  border-color: var(--primary);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--ring);
+}
+
+.plan-row {
+  display: grid;
+  align-items: end;
+  gap: 12px;
+  grid-template-columns: 1fr 160px;
+}
+
+.plan-audience {
+  display: inline-flex;
+  flex-wrap: wrap;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  gap: 2px;
+}
+
+.plan-audience button {
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.plan-audience button.is-active {
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
+.plan-budget .field {
+  width: 100%;
+}
+
+.plan-summary h2 {
+  margin-bottom: 8px;
+}
+
+.plan-total {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  margin: 0 0 8px;
+  color: var(--text-2);
+  font-size: 14px;
+  gap: 8px;
+}
+
+.plan-total strong {
+  color: var(--text);
+  font-size: 26px;
+}
+
+.plan-meter {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--border);
+}
+
+.plan-meter span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: var(--success);
+  transition: width 0.4s var(--ease);
+}
+
+.plan-summary.is-over .plan-meter span {
+  background: var(--danger);
+}
+
+.plan-note {
+  margin: 8px 0 14px;
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+.plan-summary.is-over .plan-note {
+  color: var(--danger);
+}
+
+.card.is-picked {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-soft);
+}
+
+.card-pick {
+  margin-top: 6px;
+}
+
+@media (max-width: 640px) {
+  .compare-bar {
+    right: 8px;
+    left: 8px;
+    bottom: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    border-radius: var(--radius-lg);
+    transform: none;
+  }
+
+  .compare-bar-items {
+    width: 100%;
+  }
+
+  .compare-body {
+    padding: 14px;
+  }
+
+  .compare-row {
+    gap: 8px;
+    font-size: 13px;
+  }
+
+  .plan-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* A plan has no photo: the overview takes the full width. */
+.outfit-summary.no-photo {
+  grid-template-columns: 1fr;
+}
+
+.outfit-summary.no-photo .outfit-list {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+}
+
+.outfit-summary.no-photo .plan-summary {
+  max-width: 560px;
 }

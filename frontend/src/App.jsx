@@ -24,10 +24,15 @@ import { cropToFile, prepareForUpload } from "./lib/resizeImage.js";
 import {
   streamLook,
   streamOutfit,
+  streamPlan,
   streamRating,
+  streamRoom,
   streamSearch,
   streamTextSearch,
 } from "./lib/searchStream.js";
+import CompareDialog, { CompareBar } from "./components/CompareDialog.jsx";
+import PlanPanel from "./components/PlanPanel.jsx";
+import { CompareContext, MAX_COMPARE } from "./lib/compare.js";
 import AssistantChat from "./components/AssistantChat.jsx";
 import ColoursDialog from "./components/ColoursDialog.jsx";
 import { PaletteContext, paletteMatcher, readPalette, writePalette } from "./lib/palette.js";
@@ -56,7 +61,9 @@ function readSaved() {
 const WAYS = [
   { mode: "photo", icon: "camera", label: "Photo search" },
   { mode: "text", icon: "search", label: "Describe it" },
-  { mode: "outfit", icon: "shirt", label: "Find the outfit", isNew: true },
+  { mode: "outfit", icon: "shirt", label: "Find the outfit" },
+  { mode: "plan", icon: "tag", label: "Plan on a budget", isNew: true },
+  { mode: "room", icon: "box", label: "Shop a room", isNew: true },
   { mode: "tryon", icon: "sparkles", label: "Try it on" },
 ];
 
@@ -140,6 +147,24 @@ export default function App() {
   // "Colours that suit you": the palette from a selfie, kept in this browser.
   const [palette, setPalette] = useState(readPalette);
   const [showColours, setShowColours] = useState(false);
+  // Products picked to compare, and the ones being compared in the dialog.
+  const [compareList, setCompareList] = useState([]);
+  const [comparing, setComparing] = useState(null);
+  const compareValue = useMemo(() => {
+    const ids = new Set(compareList.map(getProductId));
+    return {
+      isSelected: (product) => ids.has(getProductId(product)),
+      isFull: compareList.length >= MAX_COMPARE,
+      toggle: (product) =>
+        setCompareList((current) =>
+          current.some((item) => getProductId(item) === getProductId(product))
+            ? current.filter((item) => getProductId(item) !== getProductId(product))
+            : current.length < MAX_COMPARE
+              ? [...current, product]
+              : current
+        ),
+    };
+  }, [compareList]);
   const paletteValue = useMemo(
     () => (palette ? { ...palette, suitsYou: paletteMatcher(palette) } : null),
     [palette]
@@ -270,6 +295,7 @@ export default function App() {
   const closeCrop = useCallback(() => setIsCropping(false), []);
   const closeTryOn = useCallback(() => setTryOnProduct(null), []);
   const closeColours = useCallback(() => setShowColours(false), []);
+  const closeCompare = useCallback(() => setComparing(null), []);
 
   // Reopen a recent search: its photo and results, without searching again.
   function openRecent(entry) {
@@ -378,16 +404,20 @@ export default function App() {
       searchText("Cotton kurti for women");
       return;
     }
-    if (nextMode === "text" || nextMode === "photo" || nextMode === "outfit") {
-      changeMode(nextMode === "text" ? "text" : "photo");
+    if (nextMode === "plan" || nextMode === "text") {
+      changeMode(nextMode);
+    } else if (nextMode === "photo" || nextMode === "outfit" || nextMode === "room") {
+      changeMode("photo");
     }
     // Wait a frame so a newly shown panel can take focus.
     requestAnimationFrame(() => {
       panelRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
       const target =
-        nextMode === "outfit" && file
-          ? ".outfit-button"
-          : ".dropzone, .text-search-field input, .search-button";
+        (nextMode === "outfit" || nextMode === "room") && file
+          ? `.${nextMode === "room" ? "room" : "outfit"}-button`
+          : nextMode === "plan"
+            ? "#plan-request"
+            : ".dropzone, .text-search-field input, .search-button";
       panelRef.current?.querySelector(target)?.focus({ preventScroll: true });
     });
     setHighlightPanel(true);
@@ -500,6 +530,36 @@ export default function App() {
     );
   }
 
+  // Find the furniture and decor in a room photo and shop each piece.
+  async function shopRoom() {
+    if (!file) {
+      setError("Please upload a photo of the room first.");
+      return;
+    }
+
+    setReturnTo(null);
+    await streamItems(
+      { kind: "room", style: "", gender: "", items: [], photoUrl: URL.createObjectURL(file) },
+      async (onEvent) => streamRoom(await prepareForUpload(file), onEvent),
+      "Couldn't shop this room. Please try again."
+    );
+  }
+
+  // Plan a whole look within a budget: { request, budget, gender }.
+  async function planLook(plan) {
+    setReturnTo(null);
+    await streamItems(
+      { kind: "plan", title: "", budget: plan.budget || 0, picks: {}, gender: plan.gender || "", items: [], photoUrl: "" },
+      (onEvent) => streamPlan(plan, onEvent),
+      "Couldn't plan this look. Please try again."
+    );
+  }
+
+  // Swap the listing picked for a planned piece.
+  function pickForPlan(itemId, key) {
+    setOutfit((current) => current && { ...current, picks: { ...current.picks, [itemId]: key } });
+  }
+
   // AI stylist: score the outfit in the photo and shop what would improve it.
   async function rateOutfit() {
     if (!file) {
@@ -593,6 +653,9 @@ export default function App() {
           case "rating":
             setOutfit((current) => ({ ...current, rating: event.rating }));
             break;
+          case "plan":
+            setOutfit((current) => ({ ...current, title: event.title, budget: event.budget, gender: event.gender }));
+            break;
           case "items":
             setOutfit((current) => ({
               ...current,
@@ -608,6 +671,11 @@ export default function App() {
             setOutfit((current) => ({
               ...current,
               rating: event.rating ?? current.rating ?? null,
+              // Shop this room's style; the planner's look, budget, picks and total.
+              style: event.style ?? current.style,
+              title: event.title ?? current.title,
+              budget: event.budget ?? current.budget,
+              picks: event.picks ?? current.picks,
               gender: event.gender,
               items: event.items.map((item) => ({ ...item, pending: false })),
             }));
@@ -694,6 +762,7 @@ export default function App() {
 
   return (
     <PaletteContext.Provider value={paletteValue}>
+    <CompareContext.Provider value={compareValue}>
     <div className="app">
       <header className="site-header">
         <div className="container header-inner">
@@ -824,8 +893,16 @@ export default function App() {
                     onSearch={search}
                     onFindOutfit={findOutfit}
                     onRateOutfit={rateOutfit}
+                    onShopRoom={shopRoom}
                     isFindingOutfit={isFindingOutfit}
                     busyKind={isFindingOutfit ? outfit?.kind : null}
+                  />
+                ) : mode === "plan" ? (
+                  <PlanPanel
+                    modeTabs={modeTabs}
+                    onPlan={planLook}
+                    isPlanning={isFindingOutfit && outfit?.kind === "plan"}
+                    error={error}
                   />
                 ) : (
                   <TextSearchPanel
@@ -856,7 +933,8 @@ export default function App() {
                 onTryOn={setTryOnProduct}
                 onMore={searchText}
                 onBack={returnTo?.results && !isFindingOutfit ? goBack : null}
-                onExactMatch={outfit.kind === "look" || isSearching ? null : findExactMatch}
+                onExactMatch={outfit.kind === "look" || outfit.kind === "plan" || isSearching ? null : findExactMatch}
+                onPick={pickForPlan}
               />
             )}
 
@@ -991,7 +1069,18 @@ export default function App() {
           <span>© {new Date().getFullYear()} SnapBuy AI</span>
         </div>
       </footer>
+      {comparing && (
+        <CompareDialog products={comparing} query={results?.query || ""} onClose={closeCompare} />
+      )}
+
+      <CompareBar
+        products={compareList}
+        onCompare={() => setComparing(compareList)}
+        onRemove={compareValue.toggle}
+        onClear={() => setCompareList([])}
+      />
     </div>
+    </CompareContext.Provider>
     </PaletteContext.Provider>
   );
 }

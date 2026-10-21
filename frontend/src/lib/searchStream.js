@@ -119,3 +119,30 @@ export async function streamLook(name, onEvent, price) {
 
   await readEventStream(response, onEvent);
 }
+
+/** Shop this room: the pieces in a room photo, streamed like an outfit. */
+export async function streamRoom(file, onEvent) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await fetch(`${API_URL}/api/v1/room/stream`, {
+    method: "POST",
+    body: formData,
+  });
+
+  await readEventStream(response, onEvent);
+}
+
+/**
+ * Budget look planner: streams "plan" (title, budget), then the pieces like
+ * an outfit; "final" adds the picked listing per piece and the total.
+ */
+export async function streamPlan({ request, budget, gender }, onEvent) {
+  const response = await fetch(`${API_URL}/api/v1/plan/stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ request, budget: budget || null, gender: gender || null }),
+  });
+
+  await readEventStream(response, onEvent);
+}

@@ -73,6 +73,17 @@ function itemProducts(item) {
   return [...unique.values()];
 }
 
+/** A listing's key, as the Budget look planner's picks name it. */
+function listingKey(product) {
+  return product.product_url || product.name;
+}
+
+/** The listing picked for a planned piece, or undefined. */
+function pickedProduct(item, picks) {
+  const key = picks?.[item.id];
+  return key ? itemProducts(item).find((product) => listingKey(product) === key) : undefined;
+}
+
 /** Lowest known price among an item's options, or null. */
 function lowestPrice(item) {
   const prices = itemProducts(item)
@@ -214,7 +225,36 @@ function RatingSummary({ rating }) {
   );
 }
 
-function ItemSection({ item, index, thumbnail, savedIds, onToggleSave, onTryOn, onMore, onExactMatch }) {
+/** The Budget look planner's headline: the look and its total against the budget. */
+function PlanSummary({ outfit, total, remaining }) {
+  const budget = outfit.budget || 0;
+  const over = total > budget;
+  const share = budget ? Math.min(100, (total / budget) * 100) : 0;
+
+  return (
+    <div className={`plan-summary ${over ? "is-over" : ""}`}>
+      <h2>{outfit.title || "Your look"}</h2>
+      {remaining === 0 && (
+        <>
+          <p className="plan-total">
+            <strong>{formatAmount(total)}</strong>
+            <span>of your {formatAmount(budget)} budget</span>
+          </p>
+          <span className="plan-meter" aria-hidden="true">
+            <span style={{ width: `${share}%` }} />
+          </span>
+          <p className="plan-note">
+            {over
+              ? `${formatAmount(total - budget)} over budget: even the cheapest options add up to more. Swap a piece or raise the budget.`
+              : `${formatAmount(budget - total)} left in your budget.`}
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
+
+function ItemSection({ item, index, thumbnail, savedIds, onToggleSave, onTryOn, onMore, onExactMatch, pickKey, onPick }) {
   const products = itemProducts(item);
   const lowest = lowestPrice(item);
   const deals = computeDeals(products);
@@ -273,6 +313,11 @@ function ItemSection({ item, index, thumbnail, savedIds, onToggleSave, onTryOn, 
               onTryOn={onTryOn}
               highlight={getNumericPrice(product) === lowest && lowest !== null ? "Lowest" : null}
               deal={deals.get(getProductId(product))}
+              pick={
+                onPick
+                  ? { picked: listingKey(product) === pickKey, onPick: () => onPick(item.id, listingKey(product)) }
+                  : undefined
+              }
             />
           ))}
         </div>
@@ -296,21 +341,32 @@ function ItemSection({ item, index, thumbnail, savedIds, onToggleSave, onTryOn, 
  * summary with the price of the whole look, then a swipeable row of
  * shopping options per item.
  *
- * Also shows "Complete the look" (outfit.kind "look"): the product being
- * styled in place of the photo, and the items suggested to go with it.
+ * Also shows, by outfit.kind: "look" (Complete the look: the product being
+ * styled and what goes with it), "rating" (Rate my outfit), "room" (Shop
+ * this room: the pieces in a room photo) and "plan" (Budget look planner:
+ * the planned pieces, one picked listing each, and the total against the
+ * budget; onPick swaps a piece's listing).
  */
-export default function OutfitView({ outfit, photoUrl, savedIds, onToggleSave, onTryOn, onMore, onBack, onExactMatch }) {
+export default function OutfitView({ outfit, photoUrl, savedIds, onToggleSave, onTryOn, onMore, onBack, onExactMatch, onPick }) {
   const items = useMemo(() => outfit.items || [], [outfit.items]);
   const isLook = outfit.kind === "look";
   const isRating = outfit.kind === "rating";
+  const isRoom = outfit.kind === "room";
+  const isPlan = outfit.kind === "plan";
   const baseProduct = isLook ? outfit.product : null;
-  // Suggestions (a look's or a rating's) aren't in the photo, so there's
-  // nothing to crop; use each item's first listing instead.
-  const suggested = isLook || isRating;
+  // Suggestions (a look's, a rating's or a plan's) aren't in a photo, so
+  // there's nothing to crop; use each item's picked or first listing.
+  const suggested = isLook || isRating || isPlan;
   const cropped = useItemThumbnails(suggested ? "" : photoUrl, items);
   const thumbnails = suggested
-    ? Object.fromEntries(items.map((item) => [item.id, itemProducts(item)[0]?.image_url]))
+    ? Object.fromEntries(
+        items.map((item) => [item.id, (pickedProduct(item, outfit.picks) || itemProducts(item)[0])?.image_url])
+      )
     : cropped;
+  const planTotal = isPlan
+    ? items.reduce((sum, item) => sum + (getNumericPrice(pickedProduct(item, outfit.picks) || {}) ?? 0), 0)
+    : 0;
+  const noun = isRoom ? "piece" : "item";
   const [activeId, setActiveId] = useState(null);
   const basePrice = baseProduct ? getNumericPrice(baseProduct) : null;
 
@@ -329,11 +385,11 @@ export default function OutfitView({ outfit, photoUrl, savedIds, onToggleSave, o
           Back to results
         </button>
       )}
-      <div className="outfit-summary">
+      <div className={`outfit-summary ${photoUrl ? "" : "no-photo"}`}>
         {photoUrl && (
           <OutfitPhoto
             photoUrl={photoUrl}
-            alt={isLook ? baseProduct?.name || "The product" : "Your outfit photo"}
+            alt={isLook ? baseProduct?.name || "The product" : isRoom ? "Your room photo" : "Your outfit photo"}
             items={items}
             activeId={activeId}
             onActivate={setActiveId}
@@ -343,7 +399,15 @@ export default function OutfitView({ outfit, photoUrl, savedIds, onToggleSave, o
 
         <div className="outfit-overview">
           <span className="eyebrow">
-            {isRating ? "Rate my outfit" : isLook ? "Complete the look" : "Find the outfit"}
+            {isRating
+              ? "Rate my outfit"
+              : isLook
+                ? "Complete the look"
+                : isRoom
+                  ? "Shop this room"
+                  : isPlan
+                    ? "Budget look planner"
+                    : "Find the outfit"}
           </span>
           {baseProduct && (
             <p className="look-base">
@@ -354,14 +418,26 @@ export default function OutfitView({ outfit, photoUrl, savedIds, onToggleSave, o
           {scanning ? (
             <>
               <h2>
-                {isRating ? "Your stylist is looking…" : isLook ? "Styling the look…" : "Looking at the outfit…"}
+                {isRating
+                  ? "Your stylist is looking…"
+                  : isLook
+                    ? "Styling the look…"
+                    : isRoom
+                      ? "Looking around the room…"
+                      : isPlan
+                        ? "Planning your look…"
+                        : "Looking at the outfit…"}
               </h2>
               <p className="outfit-lead">
                 {isRating
                   ? "AI is checking the fit, colours and accessories. This takes a few seconds."
                   : isLook
                     ? "AI is picking what goes with it. This usually takes a few seconds."
-                    : "AI is spotting each item they're wearing. This usually takes a couple of seconds."}
+                    : isRoom
+                      ? "AI is spotting the furniture, lighting and decor. This usually takes a few seconds."
+                      : isPlan
+                        ? "AI is choosing the pieces and splitting your budget between them."
+                        : "AI is spotting each item they're wearing. This usually takes a couple of seconds."}
               </p>
               <div className="outfit-list" aria-hidden="true">
                 {Array.from({ length: 3 }, (_, index) => (
@@ -386,27 +462,33 @@ export default function OutfitView({ outfit, photoUrl, savedIds, onToggleSave, o
                     )}
                   </h3>
                 )
+              ) : isPlan ? (
+                <PlanSummary outfit={outfit} total={planTotal} remaining={remaining} />
               ) : (
                 <h2>
-                  {items.length} item{items.length === 1 ? "" : "s"} {isLook ? "that go with it" : "spotted"}
+                  {items.length} {noun}
+                  {items.length === 1 ? "" : "s"} {isLook ? "that go with it" : "spotted"}
                 </h2>
               )}
+              {isRoom && outfit.style && <p className="look-base">Style: <strong>{outfit.style}</strong></p>}
               {(items.length > 0 || !isRating) && (
                 <p className="outfit-lead">
                   {remaining > 0
-                    ? `Finding shopping options for ${remaining} item${remaining === 1 ? "" : "s"}…`
-                    : `Tap ${isRating ? "a suggestion" : "an item"} to see its options${audience ? ` for ${audience}` : ""}.`}
+                    ? `Finding shopping options for ${remaining} ${noun}${remaining === 1 ? "" : "s"}…`
+                    : isPlan
+                      ? "Tap a piece to see its options; swap any of them and the total updates."
+                      : `Tap ${isRating ? "a suggestion" : `a ${noun}`} to see its options${audience ? ` for ${audience}` : ""}.`}
                 </p>
               )}
 
-              {remaining === 0 && pricedCount > 1 && !isRating && (
+              {remaining === 0 && pricedCount > 1 && !isRating && !isPlan && (
                 <div className="outfit-total">
                   <Icon name="tag" size={18} />
                   <span>
-                    Get the whole look from <strong>{formatAmount(lookTotal)}</strong>
+                    Get the whole {isRoom ? "room" : "look"} from <strong>{formatAmount(lookTotal)}</strong>
                     <small>
                       {basePrice !== null ? "This item plus the cheapest option for " : "Cheapest option for "}
-                      {lookPrices.length === items.length ? "every" : `${lookPrices.length} of ${items.length}`} item
+                      {lookPrices.length === items.length ? "every" : `${lookPrices.length} of ${items.length}`} {noun}
                       {lookPrices.length === items.length ? "" : "s"}
                     </small>
                   </span>
@@ -416,6 +498,7 @@ export default function OutfitView({ outfit, photoUrl, savedIds, onToggleSave, o
               <ol className="outfit-list">
                 {items.map((item, index) => {
                   const lowest = lowestPrice(item);
+                  const picked = isPlan ? pickedProduct(item, outfit.picks) : null;
                   return (
                     <li key={item.id}>
                       <button
@@ -434,6 +517,11 @@ export default function OutfitView({ outfit, photoUrl, savedIds, onToggleSave, o
                         <span className="outfit-row-price">
                           {item.pending ? (
                             <span className="spinner" aria-label="Searching" />
+                          ) : picked ? (
+                            <>
+                              <small>picked</small>
+                              {formatAmount(getNumericPrice(picked))}
+                            </>
                           ) : lowest !== null ? (
                             <>
                               <small>from</small>
@@ -465,6 +553,8 @@ export default function OutfitView({ outfit, photoUrl, savedIds, onToggleSave, o
           onTryOn={onTryOn}
           onMore={onMore}
           onExactMatch={onExactMatch}
+          pickKey={isPlan ? outfit.picks?.[item.id] : undefined}
+          onPick={isPlan ? onPick : undefined}
         />
       ))}
     </section>

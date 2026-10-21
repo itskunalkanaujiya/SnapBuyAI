@@ -154,3 +154,97 @@ def ask_assistant(messages, products, search_query=""):
 
     new_search = _clean(data.get("search"), 80) or None
     return {"reply": reply, "picks": picks, "search": new_search}
+
+
+# --------------------------------------------------
+# Compare products side by side
+# --------------------------------------------------
+
+MIN_COMPARE = 2
+MAX_COMPARE = 3
+MAX_ATTRIBUTES = 6
+
+COMPARE_PROMPT = """You compare products for a shopper in India.{search}
+
+Products:
+{listings}
+
+Return JSON only:
+{{
+  "attributes": up to 6 features that differ or matter for this kind of product, read from the product names, each {{"name": short label, e.g. "RAM", "Material", "Display", "Strap", "values": one short value per product in the same order, "not listed" when the name doesn't say}},
+  "pros": for each product in order, 1 or 2 short phrases on its strongest points,
+  "best": the number of the product you recommend overall, or null if they are too close to call,
+  "verdict": two sentences under 45 words: which to buy and why, and when the other is the better choice
+}}
+Rules:
+- Use only facts from the names, prices, stores, ratings and review counts. Never invent specs.
+- Don't repeat price, store or rating as attributes; those are shown already.
+- Weigh price against rating and number of reviews; a 4.5 rating from 3 reviews means little.
+- Refer to products by brand or store and price, e.g. "the ₹1,299 Puma", not by number."""
+
+
+def compare_products(products, search_query=""):
+    """
+    Compare 2-3 listings: {"attributes": [{"name", "values"}], "pros":
+    [[...], ...], "best": index or None, "verdict"}. Raises AssistantError.
+    """
+    products = [product for product in (products or []) if isinstance(product, dict)]
+    if not MIN_COMPARE <= len(products) <= MAX_COMPARE:
+        raise AssistantInputError(f"Pick {MIN_COMPARE} or {MAX_COMPARE} products to compare.")
+
+    listings = "\n".join(describe_listing(position, product) for position, product in enumerate(products, 1))
+    search = _clean(search_query, 100)
+    prompt = COMPARE_PROMPT.format(
+        listings=listings,
+        search=f' They searched for "{search}".' if search else "",
+    )
+    try:
+        data = chat_json(
+            [{"role": "user", "content": prompt}],
+            max_tokens=700,
+            timeout=TIMEOUT_SECONDS,
+            temperature=0.2,
+        )
+    except requests.HTTPError as exc:
+        if exc.response is not None and exc.response.status_code == 429:
+            raise AssistantError("The assistant is busy right now. Please try again in a minute.")
+        print(f"Compare model error: {exc}")
+        raise AssistantError("Couldn't compare these products. Please try again.")
+    except (requests.RequestException, RuntimeError, ValueError, KeyError, IndexError, TypeError,
+            json.JSONDecodeError) as exc:
+        print(f"Compare model failed: {exc}")
+        raise AssistantError("Couldn't compare these products. Please try again.")
+
+    count = len(products)
+    attributes = []
+    for raw in data.get("attributes") or []:
+        if not isinstance(raw, dict):
+            continue
+        name = _clean(raw.get("name"), 30)
+        values = raw.get("values") if isinstance(raw.get("values"), list) else []
+        values = [_clean(str(value), 60) or "not listed" for value in values[:count]]
+        if not name or len(values) != count or all(v.lower() == "not listed" for v in values):
+            continue
+        attributes.append({"name": name, "values": values})
+        if len(attributes) == MAX_ATTRIBUTES:
+            break
+
+    raw_pros = data.get("pros") if isinstance(data.get("pros"), list) else []
+    pros = []
+    for index in range(count):
+        entry = raw_pros[index] if index < len(raw_pros) else []
+        phrases = entry if isinstance(entry, list) else [entry]
+        pros.append([text for text in (_clean(p, 80) for p in phrases[:2] if isinstance(p, str)) if text])
+
+    best = None
+    try:
+        if data.get("best") is not None:
+            index = int(data["best"]) - 1
+            best = index if 0 <= index < count else None
+    except (TypeError, ValueError):
+        best = None
+
+    verdict = _clean(data.get("verdict"), 400)
+    if not verdict:
+        raise AssistantError("Couldn't compare these products. Please try again.")
+    return {"attributes": attributes, "pros": pros, "best": best, "verdict": verdict}

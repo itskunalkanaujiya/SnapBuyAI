@@ -97,6 +97,7 @@ export default function UploadPanel({
   onSearch,
   onFindOutfit,
   onRateOutfit,
+  onShopRoom,
   isFindingOutfit = false,
   busyKind = null,
 }) {
@@ -328,6 +329,26 @@ export default function UploadPanel({
             <>
               <Icon name="star" size={17} />
               Rate my outfit
+            </>
+          )}
+        </button>
+
+        <button
+          type="button"
+          className="button button-secondary search-button room-button"
+          onClick={onShopRoom}
+          disabled={!file || isSearching || isFindingOutfit}
+          title="Find the furniture and decor in a room photo"
+        >
+          {isFindingOutfit && busyKind === "room" ? (
+            <>
+              <span className="spinner" />
+              Shopping the room…
+            </>
+          ) : (
+            <>
+              <Icon name="box" size={17} />
+              Shop this room
               <span className="new-pill">New</span>
             </>
           )}

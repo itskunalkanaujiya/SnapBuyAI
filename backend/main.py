@@ -26,7 +26,9 @@ from image_shopping_service import (
 from text_shopping_service import search_products_by_text as search_shopping_text
 from outfit_service import OutfitError, complete_the_look, find_outfit
 from style_service import analyse_colours, rate_outfit
-from assistant_service import AssistantError, ask_assistant
+from assistant_service import AssistantError, ask_assistant, compare_products
+from room_service import find_room
+from planner_service import PlanError, plan_look, read_budget
 from tryon_service import GARMENT_WORDS, TryOnError, product_overlay, try_on
 
 # --------------------------------------------------
@@ -1031,3 +1033,100 @@ async def colours_that_suit(request: Request, file: UploadFile = File(...)):
         return await run_in_threadpool(analyse_colours, image)
     except OutfitError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
+
+
+# --------------------------------------------------
+# Compare products
+# --------------------------------------------------
+
+
+class CompareRequest(BaseModel):
+    products: list[dict]
+    query: str = ""
+
+
+@app.post("/api/v1/compare")
+async def compare(request: Request, body: CompareRequest):
+    """Compare 2-3 listings side by side: {attributes, pros, best, verdict}."""
+    enforce_limit(request, _assistant_log, ASSISTANT_LIMIT, ASSISTANT_WINDOW_SECONDS, "questions")
+    if not os.getenv("GROQ_API_KEY"):
+        raise HTTPException(status_code=503, detail="Compare isn't set up on this server yet.")
+    try:
+        return await run_in_threadpool(compare_products, body.products, body.query)
+    except AssistantError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc))
+
+
+# --------------------------------------------------
+# Shop this room
+# --------------------------------------------------
+
+
+@app.post("/api/v1/room/stream")
+async def shop_the_room_stream(request: Request, file: UploadFile = File(...)):
+    """
+    Find the furniture and decor in a room photo and shop each piece,
+    streamed like Find the outfit: "stage", "items", one "item" per piece,
+    then "final" (with the room's "style") or "error".
+    """
+    image = await read_uploaded_image(file)
+    fingerprint = await run_in_threadpool(image_fingerprint, image)
+    cache_key = f"room:{fingerprint}"
+
+    cached = get_cached_search(cache_key)
+    if cached is None:
+        check_search_limit(request)
+
+    return stream_search_response(
+        cache_key,
+        cached,
+        first_stage="identifying",
+        run=lambda emit: find_room(image, on_event=emit),
+        shape=lambda room: room,
+    )
+
+
+# --------------------------------------------------
+# Budget look planner
+# --------------------------------------------------
+
+
+class PlanRequest(BaseModel):
+    request: str
+    budget: float | None = None
+    gender: str | None = None
+
+
+@app.post("/api/v1/plan/stream")
+async def plan_a_look_stream(request: Request, body: PlanRequest):
+    """
+    Plan a whole look within a budget and shop it, streamed: "stage",
+    "plan" (title, budget, gender), "items", one "item" per piece, then
+    "final" with the picked listing per piece ("picks") and the "total".
+    """
+    text = clean_query(body.request) or ""
+    gender = (body.gender or "").strip().lower() or None
+    try:
+        budget = await run_in_threadpool(read_budget_or_400, text, body.budget)
+    except PlanError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    cache_key = f"plan:{text.lower()}:{budget:.0f}:{gender or ''}"
+
+    cached = get_cached_search(cache_key)
+    if cached is None:
+        check_search_limit(request)
+
+    return stream_search_response(
+        cache_key,
+        cached,
+        first_stage="planning",
+        run=lambda emit: plan_look(text, budget, gender, on_event=emit),
+        shape=lambda plan: plan,
+    )
+
+
+def read_budget_or_400(text, budget):
+    """The plan's budget (given, or read from the request); PlanError if none."""
+    if len(text) < 3:
+        raise PlanError("Describe the look you want, e.g. \"wedding outfit for men under ₹5,000\".")
+    return read_budget(text, budget)

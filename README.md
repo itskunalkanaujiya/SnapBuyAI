@@ -36,6 +36,26 @@ usable: a plain background and, for glasses, a front view (both lenses found
 and alike, as clear-lens holes or tinted areas), so the frame on the face is
 always the real product photo.
 
+**Budget look planner.** The "Plan" tab: an occasion ("wedding guest
+outfit"), who it's for and a total budget (or a budget in the sentence, "2k
+tak"). A Groq model plans 3-5 pieces and splits the budget between them
+(`backend/planner_service.py`); each piece is searched and checked by the
+listing judge within its share, then one listing is picked per piece so the
+total stays within budget (the piece with the most to save steps down to a
+cheaper option until it fits). Users can swap any piece; the total and the
+budget bar update.
+
+**Shop this room.** Like Find the outfit, for a photo of a room
+(`backend/room_service.py`): the vision model lists up to 8 pieces of
+furniture, lighting and decor with boxes, each is searched and re-ranked
+against its crop (CLIP), with the price of the whole room.
+
+**Compare.** A "Compare" checkbox on every card; with 2 or 3 picked, a bar
+opens a side-by-side table (price, store, rating) plus the features a Groq
+model reads from the names (RAM, material, display...), each product's
+strong points, a best pick and a verdict (`compare_products` in
+`backend/assistant_service.py`).
+
 **Rate my outfit.** Next to Find the outfit: the vision model scores the
 look out of 10, says what works, and suggests 2-3 new items to add or swap
 (`backend/style_service.py`), each searched like an outfit item so every tip

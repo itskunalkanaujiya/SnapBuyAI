@@ -21,6 +21,9 @@ What a shopper can do:
 | Rate my outfit | A style score with four sub-scores and 2–3 shoppable tips to improve the look |
 | Colours that suit you | A selfie gives a colour palette; results in your colours get "Suits you" |
 | Complete the look | On any product: AI suggests what goes with it, with listings |
+| Plan on a budget | "Wedding guest outfit, men, ₹5,000" → a whole look, one pick per piece, total within budget |
+| Shop this room | One room photo → every piece of furniture and decor, each with listings |
+| Compare | Tick 2–3 products for a side-by-side table, features read by AI, and a verdict |
 | Ask AI | A chat that compares the listings on screen and recommends one |
 | Try on | Clothes on your photo (AI, Hugging Face); glasses and watches placed on your face or wrist photo |
 | Saved and recent | Wishlist and recent searches, kept in the browser |
@@ -65,7 +68,7 @@ The app is two parts: a React single-page app and a Python FastAPI service, both
 | Search providers | Serper.dev, SerpApi, SearchApi.io | Google Shopping and Google Lens results |
 | Temporary image hosting | Vercel Blob | Gives Google Lens a public URL for the uploaded photo |
 | Hosting | Vercel (two projects) | Static frontend + Python serverless backend |
-| Quality | pytest, ESLint, GitHub Actions | 247 backend tests, linting, CI on every backend push |
+| Quality | pytest, ESLint, GitHub Actions | 264 backend tests, linting, CI on every backend push |
 
 ## Project structure
 
@@ -85,10 +88,12 @@ SnapBuyAI/
 │   ├── llm_query_parser.py        Groq language model for sentence-style queries; shared chat_json helper
 │   ├── outfit_service.py          Find the outfit + Complete the look; shared vision call (Gemini/Groq)
 │   ├── style_service.py           Rate my outfit + Colours that suit you
+│   ├── room_service.py            Shop this room
+│   ├── planner_service.py         Budget look planner: plan, budget split, picks
 │   ├── listing_judge.py           AI check that a suggestion's listings are the right item
 │   ├── assistant_service.py       "Ask AI" chat about the listings on screen
 │   ├── tryon_service.py           Clothes try-on (Hugging Face) + glasses/watch cut-outs
-│   ├── tests/                     247 pytest tests (no network: providers are faked)
+│   ├── tests/                     264 pytest tests (no network: providers are faked)
 │   ├── requirements.txt           Python dependencies (pyproject.toml for Vercel's build)
 │   ├── vercel.json, .vercelignore Serverless settings; keeps .env and tests out of deploys
 │   └── .env.example               Names of every setting (copy to .env and fill in)
@@ -105,6 +110,8 @@ SnapBuyAI/
         │   ├── ProductCard.jsx         One listing: price, deal line, badges, Try on, Complete the look
         │   ├── OutfitView.jsx          Outfit, look and rating screens
         │   ├── AssistantChat.jsx       "Ask AI about these" chat panel
+        │   ├── PlanPanel.jsx           Budget look planner form (the "Plan" tab)
+        │   ├── CompareDialog.jsx       Compare bar and side-by-side dialog
         │   ├── ColoursDialog.jsx       Colours that suit you
         │   ├── TryOnDialog.jsx         Clothes try-on (before/after)
         │   ├── AccessoryTryOnDialog.jsx Glasses and watch try-on on a photo
@@ -180,6 +187,23 @@ A selfie returns a seasonal colour type (for example "Deep Autumn, warm"), best 
 
 On any product card: a Groq model suggests 3–4 items that go with it at the same price level, each with a reason; listings are checked by the listing judge.
 
+### Plan on a budget
+
+The "Plan" tab takes an occasion, who it's for and a total budget (or a budget in the sentence, such as "2k tak").
+
+1. A Groq model plans 3–5 wearable pieces and splits the budget between them.
+2. Each piece is searched; the listing judge keeps the right items within that piece's share.
+3. One listing is picked per piece; while the total is over budget, the piece with the most to save steps down to a cheaper option.
+4. The user can swap any piece ("Use in my look"); the total and the budget bar update. Code: `planner_service.py`, `PlanPanel.jsx`.
+
+### Shop this room
+
+Like Find the outfit, for a room photo: the vision model lists up to 8 pieces of furniture, lighting and decor with boxes; each is searched and re-ranked against its crop, with the price of the whole room. Code: `room_service.py`.
+
+### Compare
+
+Every card has a Compare checkbox. With 2 or 3 picked, the compare bar opens a side-by-side table: price, store and rating, the features a Groq model reads from the names (RAM, material, display…), each product's strong points, a best pick and a short verdict. Code: `compare_products` in `assistant_service.py`, `CompareDialog.jsx`.
+
 ### Ask AI (shopping assistant)
 
 A chat panel over the results. The model sees only the listings on screen (name, price, store, rating, reviews), answers in English, Hindi or Hinglish, links its picks and can suggest a new search. Code: `assistant_service.py`, `AssistantChat.jsx`.
@@ -235,6 +259,9 @@ All routes are under the backend URL (`http://127.0.0.1:8000` locally). Interact
 | POST | `/api/v1/style/rate/stream` | `file`, optional `colours` (comma list) | Streams `rating`, `items`, `item`, `final` |
 | POST | `/api/v1/style/colours` | `file` (selfie) | `{undertone, season, summary, best, avoid}` |
 | POST | `/api/v1/assistant` | JSON `{messages, products, query}` | `{reply, picks, search}` |
+| POST | `/api/v1/compare` | JSON `{products (2–3), query}` | `{attributes, pros, best, verdict}` |
+| POST | `/api/v1/room/stream` | `file` (room photo) | Streams `items`, one `item` per piece, `final` with `style` |
+| POST | `/api/v1/plan/stream` | JSON `{request, budget?, gender?}` | Streams `plan`, `items`, `item`, `final` with `picks` and `total` |
 | POST | `/api/v1/tryon` | Person photo + garment | Try-on image (JPEG) |
 | GET | `/api/v1/tryon/overlay` | `url`, `category` (`glasses`/`watch`) | Cut-out PNG; lens centres in `X-Lens-Centres` |
 
@@ -281,7 +308,7 @@ Run all three checks before every push; they take under a minute together.
 
 | Check | Command | What it covers |
 | --- | --- | --- |
-| Backend tests | `cd backend && pip install -r requirements-dev.txt && pytest -q` | 247 tests: ranking, prices, Hinglish parsing, outfit, rating, colours, judge, API routes |
+| Backend tests | `cd backend && pip install -r requirements-dev.txt && pytest -q` | 264 tests: ranking, prices, Hinglish parsing, outfit, rating, colours, judge, API routes |
 | Lint | `cd frontend && npx eslint src` | React and hooks rules |
 | Build | `cd frontend && npx vite build` | The production bundle compiles |
 
