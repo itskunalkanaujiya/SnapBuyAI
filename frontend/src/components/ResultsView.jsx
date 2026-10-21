@@ -14,20 +14,6 @@ import {
   hasActiveFilters,
 } from "../lib/products.js";
 
-function Stat({ icon, label, value }) {
-  return (
-    <div className="stat">
-      <span className="stat-icon">
-        <Icon name={icon} size={16} />
-      </span>
-      <div>
-        <span className="stat-label">{label}</span>
-        <span className="stat-value">{value}</span>
-      </div>
-    </div>
-  );
-}
-
 function Toolbar({ filters, onChange, stores, shownCount, totalCount, hasMatchScores, hasPalette }) {
   const set = (key) => (event) => onChange({ ...filters, [key]: event.target.value });
   const active = hasActiveFilters(filters);
@@ -291,7 +277,7 @@ export default function ResultsView({
     <section className="results container">
       <div className="results-header">
         <div className="results-title">
-          <span className="eyebrow">Results</span>
+          <span className="results-kicker">{kind === "text" ? "Results for" : "Matches for your photo"}</span>
           {isRefining ? (
             <RefineForm
               query={query}
@@ -303,15 +289,8 @@ export default function ResultsView({
             />
           ) : (
             <h2>
-              {query ? (
-                <>
-                  {kind === "text" ? "Results for" : "Matches for"}{" "}
-                  {/* Typed searches are shown exactly as written ("boAt", "iPhone"). */}
-                  <span className={`query-chip ${kind === "text" ? "is-typed" : ""}`}>{query}</span>
-                </>
-              ) : (
-                "Matching products"
-              )}
+              {/* Typed searches are shown exactly as written ("boAt", "iPhone"). */}
+              {query ? <span className="results-query">{query}</span> : "Matching products"}
               {onRefine && !isUpdating && (
                 <button
                   type="button"
@@ -324,6 +303,13 @@ export default function ResultsView({
               )}
             </h2>
           )}
+          <p className="results-meta">
+            {allProducts.length} listing{allProducts.length === 1 ? "" : "s"}
+            {stats.lowest && stats.lowest !== "—" ? ` · from ${stats.lowest}` : ""}
+            {kind === "text"
+              ? ` · ${stats.stores} store${stats.stores === 1 ? "" : "s"}`
+              : ` · ${stats.inStock} in stock`}
+          </p>
           {understood?.length > 0 && !isRefining && (
             <ul className="understood" aria-label="Your search was understood as">
               <li className="understood-label">
@@ -339,15 +325,6 @@ export default function ResultsView({
           )}
         </div>
 
-        <div className="stats">
-          <Stat icon="layers" label="Listings" value={allProducts.length} />
-          <Stat icon="trendDown" label="Lowest price" value={stats.lowest} />
-          {kind === "text" ? (
-            <Stat icon="store" label="Stores" value={stats.stores} />
-          ) : (
-            <Stat icon="box" label="In stock" value={stats.inStock} />
-          )}
-        </div>
       </div>
 
       {restoredAt && !isUpdating && (

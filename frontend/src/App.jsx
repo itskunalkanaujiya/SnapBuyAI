@@ -500,6 +500,14 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  // Home, scrolled to the list of every tool.
+  function goTools() {
+    goHome();
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => document.querySelector(".tool-hub")?.scrollIntoView({ behavior: "smooth" }))
+    );
+  }
+
   // The photo page's main button, for the chosen purpose.
   function runPhoto(chosen) {
     if (chosen === "outfit") findOutfit();
@@ -895,8 +903,10 @@ export default function App() {
               onClick={goHome}
               aria-label="Home"
             >
-              <Icon name="search" size={16} />
               <span className="nav-label">Home</span>
+            </button>
+            <button type="button" className="nav-item" onClick={goTools}>
+              <span className="nav-label">Tools</span>
             </button>
             <button
               type="button"
@@ -1049,16 +1059,14 @@ export default function App() {
             ) : (
               <section className="home-hero">
                 <div className="container home-hero-inner">
-                  <span className="pill pill-outline">
-                    <span className="pill-dot" />
-                    Your AI shopping assistant for India
-                  </span>
                   <h1>
-                    Shop smarter with <span className="hero-accent">AI</span>
+                    Find it.
+                    <br />
+                    <span className="hero-soft">For less.</span>
                   </h1>
                   <p className="hero-lead">
-                    Search by photo, words or voice and see where it's cheapest. Plan outfits on
-                    a budget, find gifts, and get told when prices drop.
+                    Search with a photo, your words or your voice. SnapBuy checks every store and
+                    shows you where it's cheapest.
                   </p>
                   <HomeSearch
                     query={textQuery}
@@ -1240,6 +1248,31 @@ export default function App() {
           <span>© {new Date().getFullYear()} SnapBuy AI</span>
         </div>
       </footer>
+      {/* Phones: app-style navigation at the bottom. */}
+      <nav className="tab-bar" aria-label="Main">
+        <button
+          type="button"
+          className={view === "discover" && !tool ? "is-active" : ""}
+          onClick={goHome}
+        >
+          <Icon name="home" size={21} />
+          Home
+        </button>
+        <button type="button" className={tool ? "is-active" : ""} onClick={goTools}>
+          <Icon name="grid" size={21} />
+          Tools
+        </button>
+        <button type="button" className={view === "saved" ? "is-active" : ""} onClick={() => setView("saved")}>
+          <Icon name="heart" size={21} />
+          Saved
+          {saved.length + watches.length > 0 && <span className="tab-count">{saved.length + watches.length}</span>}
+        </button>
+        <button type="button" onClick={() => setShowColours(true)}>
+          <Icon name="palette" size={21} />
+          Colours
+        </button>
+      </nav>
+
       {comparing && (
         <CompareDialog products={comparing} query={results?.query || ""} onClose={closeCompare} />
       )}

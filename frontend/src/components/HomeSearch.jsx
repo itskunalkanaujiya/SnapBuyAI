@@ -36,7 +36,7 @@ export default function HomeSearch({ query, onQueryChange, onSearch, onPhoto, is
         <input
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
-          placeholder={voice.listening ? "Listening… say what you want to buy" : "What are you looking for?"}
+          placeholder={voice.listening ? "Listening… say what you want to buy" : "Search for anything"}
           aria-label="What are you looking for?"
           maxLength={150}
           enterKeyHint="search"

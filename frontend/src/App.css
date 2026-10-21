@@ -6567,3 +6567,663 @@ a.chat-pick:hover {
   padding: 0;
   font-size: 12.5px;
 }
+
+/* =========================================================
+   Premium minimal: white space, large type, few elements.
+   These rules come last so they set the look everywhere.
+   ========================================================= */
+
+body {
+  background: #ffffff;
+}
+
+/* ---------- Header ---------- */
+
+.site-header {
+  border-bottom-color: var(--border);
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.logo-mark {
+  border-radius: 10px;
+  background: #111113;
+  box-shadow: none;
+}
+
+.logo-tag {
+  background: #f2f2f3;
+  color: #55565d;
+}
+
+.nav {
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  gap: 2px;
+}
+
+.nav-item {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  color: var(--text-2);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.nav-item:hover {
+  color: var(--text);
+}
+
+.nav-item.is-active {
+  background: var(--surface-sunken);
+  color: var(--text);
+}
+
+/* ---------- Buttons and fields ---------- */
+
+.button {
+  border-radius: 999px;
+}
+
+.button-primary {
+  background: #111113;
+  color: #ffffff;
+}
+
+.button-primary:hover:not(:disabled) {
+  background: #000000;
+  box-shadow: none;
+}
+
+.button-secondary {
+  border-color: var(--border-strong);
+  background: #ffffff;
+  color: var(--text);
+}
+
+.button-secondary:hover:not(:disabled) {
+  border-color: #111113;
+}
+
+.field {
+  border-color: transparent;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+}
+
+.field:focus,
+.field:focus-within {
+  border-color: #111113;
+  background: #ffffff;
+}
+
+/* ---------- Home ---------- */
+
+.home-hero {
+  padding: 104px 0 64px;
+  border-bottom: 0;
+  background: #ffffff;
+}
+
+.home-hero h1 {
+  margin: 0 0 22px;
+  font-size: clamp(52px, 8.4vw, 104px);
+  font-weight: 700;
+  letter-spacing: -0.05em;
+  line-height: 0.95;
+}
+
+.hero-soft {
+  color: #a3a4aa;
+}
+
+.home-hero .hero-lead {
+  max-width: 540px;
+  margin: 0 0 40px;
+  color: var(--text-2);
+  font-size: 19px;
+  line-height: 1.55;
+}
+
+.home-search-bar {
+  padding: 8px 8px 8px 22px;
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 16px 40px -18px rgba(0, 0, 0, 0.18);
+}
+
+.home-search-bar:focus-within {
+  border-color: #111113;
+  box-shadow: 0 0 0 4px rgba(17, 17, 19, 0.06), 0 16px 40px -18px rgba(0, 0, 0, 0.18);
+}
+
+.home-search-bar input {
+  height: 52px;
+  font-size: 17px;
+}
+
+.home-search-go {
+  height: 52px;
+  padding: 0 26px;
+}
+
+.home-search-tool:hover,
+.home-search-lang:hover {
+  background: var(--surface-sunken);
+  color: var(--text);
+}
+
+.home-search-examples {
+  margin-top: 22px;
+}
+
+.home-search-examples button {
+  border: 0;
+  background: var(--surface-sunken);
+  color: var(--text-2);
+}
+
+.home-search-examples button:hover:not(:disabled) {
+  background: #e8e8ea;
+  color: var(--text);
+}
+
+.home-search-hint {
+  margin-top: 16px;
+}
+
+/* ---------- Every tool: a quiet list ---------- */
+
+.tool-hub {
+  padding-top: 80px;
+  padding-bottom: 32px;
+  border-top: 1px solid var(--border);
+}
+
+.tool-hub > h2 {
+  margin: 0 0 44px;
+  font-size: clamp(30px, 3.6vw, 44px);
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  text-align: left;
+}
+
+.tool-groups {
+  gap: 56px;
+}
+
+.tool-group h3 {
+  margin: 0;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #111113;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.tool-group ul {
+  gap: 0;
+}
+
+.tool-card {
+  padding: 20px 0;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: none;
+  gap: 16px;
+}
+
+.tool-card:hover {
+  border-color: var(--border);
+  box-shadow: none;
+  transform: none;
+}
+
+.tool-card:hover strong {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.tool-card-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--surface-sunken);
+  color: var(--text);
+}
+
+.tool-card-text strong {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.tool-card-text small {
+  color: var(--text-3);
+  font-size: 14px;
+}
+
+.tool-card:hover .tool-card-arrow {
+  color: var(--text);
+}
+
+/* ---------- How it works and FAQ ---------- */
+
+.landing-section {
+  padding-top: 96px;
+  padding-bottom: 96px;
+}
+
+.landing-band {
+  border-color: var(--border);
+  background: #ffffff;
+}
+
+/* ---------- A tool page ---------- */
+
+.tool-page {
+  padding: 40px 0 72px;
+  border-bottom: 0;
+  background: #ffffff;
+}
+
+.tool-page-header {
+  margin-bottom: 32px;
+}
+
+.tool-page-header .tool-card-icon {
+  background: var(--surface-sunken);
+}
+
+.tool-page-header h1 {
+  font-size: clamp(32px, 4.4vw, 48px);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+}
+
+.tool-page-header p {
+  color: var(--text-3);
+  font-size: 17px;
+}
+
+.panel {
+  border-color: var(--border);
+  box-shadow: none;
+}
+
+.search-panel {
+  padding: 28px;
+}
+
+.dropzone {
+  border: 1.5px dashed var(--border-strong);
+  background: var(--surface-2);
+}
+
+.dropzone:hover,
+.dropzone.is-dragging {
+  border-color: #111113;
+  background: #ffffff;
+}
+
+.purpose-option.is-active {
+  background: #ffffff;
+  box-shadow: 0 0 0 1.5px #111113;
+}
+
+/* ---------- Results ---------- */
+
+.results-header {
+  display: block;
+  margin: 56px 0 28px;
+}
+
+.results-kicker {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--text-3);
+  font-size: 14px;
+}
+
+.results-title h2 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  color: var(--text);
+  font-size: clamp(30px, 4.2vw, 50px);
+  font-weight: 700;
+  gap: 8px 16px;
+  letter-spacing: -0.04em;
+  line-height: 1.05;
+}
+
+.results-query {
+  color: var(--text);
+}
+
+.refine-button {
+  font-size: 13px;
+  letter-spacing: 0;
+}
+
+.results-meta {
+  margin: 10px 0 0;
+  color: var(--text-2);
+  font-size: 15px;
+}
+
+.understood {
+  margin-top: 14px;
+}
+
+.toolbar {
+  top: var(--header-height);
+  margin-bottom: 40px;
+  padding: 12px 0;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: none;
+}
+
+.result-section {
+  margin-bottom: 64px;
+}
+
+.section-header .section-icon {
+  display: none;
+}
+
+.section-header h3 {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+.section-header p {
+  color: var(--text-3);
+}
+
+.count-pill {
+  background: var(--surface-sunken);
+  color: var(--text-2);
+}
+
+.dupes-section {
+  padding: 28px;
+  border: 0;
+  border-radius: var(--radius-xl);
+  background: var(--surface-2);
+}
+
+/* ---------- Product cards: the photo leads ---------- */
+
+.product-grid {
+  gap: 36px 20px;
+}
+
+.card {
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.card:not(.card-skeleton):hover {
+  box-shadow: none;
+  transform: none;
+}
+
+.card-media {
+  overflow: hidden;
+  border: 0;
+  border-radius: 20px;
+  background: var(--media-bg);
+}
+
+.card-media img {
+  mix-blend-mode: multiply;
+  transition: transform 0.4s var(--ease);
+}
+
+.card:hover .card-media img {
+  transform: scale(1.04);
+}
+
+.card-body {
+  padding: 14px 2px 0;
+}
+
+.card-title {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.card-price {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.card-cta {
+  height: 36px;
+  border-color: var(--border-strong);
+  background: #ffffff;
+  font-size: 13px;
+}
+
+.card-cta:not(.is-disabled):hover {
+  border-color: #111113;
+  background: #111113;
+  box-shadow: none;
+}
+
+.save-button,
+.watch-button {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+
+.watch-button {
+  top: 46px;
+}
+
+.watch-button.is-watching {
+  background: #111113;
+}
+
+.tryon-button {
+  background: #111113;
+}
+
+.card.is-picked .card-media,
+.compare-product.is-best {
+  box-shadow: 0 0 0 2px #111113;
+}
+
+.card.is-picked {
+  box-shadow: none;
+}
+
+/* ---------- Outfit, look, rating and plan screens ---------- */
+
+.outfit-summary {
+  border-color: var(--border);
+  border-radius: var(--radius-xl);
+  box-shadow: none;
+}
+
+.outfit-total,
+.rating {
+  border-color: var(--border);
+  background: var(--surface-2);
+}
+
+/* ---------- Floating buttons ---------- */
+
+.chat-launcher {
+  background: #111113;
+  box-shadow: 0 12px 30px -12px rgba(0, 0, 0, 0.45);
+}
+
+.chat-avatar {
+  background: #111113;
+}
+
+.chat-user {
+  background: #111113;
+}
+
+/* ---------- Phones: app-style tab bar ---------- */
+
+.tab-bar {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .site-header .nav {
+    display: none;
+  }
+
+  .header-inner {
+    justify-content: center;
+  }
+
+  .tab-bar {
+    position: fixed;
+    z-index: 70;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    display: grid;
+    padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.94);
+    backdrop-filter: saturate(180%) blur(16px);
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .tab-bar button {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 6px 0 2px;
+    border: 0;
+    background: none;
+    color: var(--text-3);
+    font-size: 11px;
+    font-weight: 600;
+    gap: 3px;
+  }
+
+  .tab-bar button.is-active {
+    color: var(--text);
+  }
+
+  .tab-count {
+    position: absolute;
+    top: 2px;
+    left: calc(50% + 6px);
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 999px;
+    background: #111113;
+    color: #ffffff;
+    font-size: 10px;
+    line-height: 16px;
+  }
+
+  .app {
+    padding-bottom: calc(68px + env(safe-area-inset-bottom));
+  }
+
+  .chat-launcher,
+  .compare-bar {
+    bottom: calc(80px + env(safe-area-inset-bottom));
+  }
+
+  .chat-panel {
+    bottom: calc(76px + env(safe-area-inset-bottom));
+    height: calc(100vh - 150px);
+  }
+
+  .home-hero {
+    padding: 56px 0 36px;
+  }
+
+  .home-hero h1 {
+    font-size: 56px;
+  }
+
+  .home-hero .hero-lead {
+    margin-bottom: 28px;
+    font-size: 16px;
+  }
+
+  .home-search-bar {
+    padding-left: 16px;
+  }
+
+  .home-search-bar input {
+    height: 48px;
+    font-size: 16px;
+  }
+
+  .home-search-go {
+    width: 48px;
+    height: 48px;
+  }
+
+  .tool-hub {
+    padding-top: 48px;
+  }
+
+  .tool-hub > h2 {
+    margin-bottom: 24px;
+    font-size: 28px;
+  }
+
+  .tool-groups {
+    gap: 36px;
+  }
+
+  .tool-page {
+    padding-top: 24px;
+  }
+
+  .results-header {
+    margin-top: 32px;
+  }
+
+  .product-grid {
+    gap: 28px 12px;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .card-media {
+    border-radius: 16px;
+  }
+
+  .card-price {
+    font-size: 16px;
+  }
+
+  .landing-section {
+    padding-top: 64px;
+    padding-bottom: 64px;
+  }
+
+  .site-footer {
+    padding-bottom: 16px;
+  }
+}
