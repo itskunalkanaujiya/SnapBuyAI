@@ -7,6 +7,7 @@ import ProductCard from "./components/ProductCard.jsx";
 import RecentSearches from "./components/RecentSearches.jsx";
 import HomeSearch from "./components/HomeSearch.jsx";
 import ToolGrid from "./components/ToolGrid.jsx";
+import { HeroBackdrop, StoreMarquee } from "./components/HeroDecor.jsx";
 import { TOOLS } from "./lib/tools.js";
 import TryOnDialog from "./components/TryOnDialog.jsx";
 import AccessoryTryOnDialog from "./components/AccessoryTryOnDialog.jsx";
@@ -977,15 +978,15 @@ export default function App() {
         {view === "discover" ? (
           <>
             {tool ? (
-              <section className="tool-page">
+              <section className={`tool-page tone-${TOOLS[tool === "photo" ? PURPOSE_TOOLS[purpose] : tool].tone}`}>
                 <div className="container tool-page-inner">
                   <button type="button" className="link-button tool-back" onClick={goHome}>
                     <Icon name="undo" size={14} />
                     All tools
                   </button>
                   <header className="tool-page-header">
-                    <span className="tool-card-icon" aria-hidden="true">
-                      <Icon name={TOOLS[tool === "photo" ? PURPOSE_TOOLS[purpose] : tool].icon} size={22} />
+                    <span className="tool-page-emoji" aria-hidden="true">
+                      {TOOLS[tool === "photo" ? PURPOSE_TOOLS[purpose] : tool].emoji}
                     </span>
                     <div>
                       <h1>{TOOLS[tool === "photo" ? PURPOSE_TOOLS[purpose] : tool].title}</h1>
@@ -1058,11 +1059,12 @@ export default function App() {
               </section>
             ) : (
               <section className="home-hero">
+                <HeroBackdrop />
                 <div className="container home-hero-inner">
                   <h1>
                     Find it.
                     <br />
-                    <span className="hero-soft">For less.</span>
+                    <span className="hero-gradient">For less.</span>
                   </h1>
                   <p className="hero-lead">
                     Search with a photo, your words or your voice. SnapBuy checks every store and
@@ -1077,6 +1079,7 @@ export default function App() {
                     error={error}
                   />
                 </div>
+                <StoreMarquee />
               </section>
             )}
 

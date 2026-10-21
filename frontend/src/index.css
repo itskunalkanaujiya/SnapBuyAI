@@ -23,13 +23,14 @@
   --text-2: #55565d;
   --text-3: #8b8c93;
 
-  /* Brand: ink black, used sparingly */
-  --primary: #111113;
-  --primary-hover: #000000;
-  --primary-soft: #f2f2f3;
-  --primary-text: #111113;
+  /* Brand: vivid violet, with a violet-pink-amber gradient for highlights */
+  --primary: #6d4aff;
+  --primary-hover: #5b37f5;
+  --primary-soft: #f1ecff;
+  --primary-text: #5531e8;
   --on-primary: #ffffff;
-  --ring: rgba(17, 17, 19, 0.14);
+  --ring: rgba(109, 74, 255, 0.22);
+  --brand-gradient: linear-gradient(120deg, #7c5cff 0%, #c056f5 45%, #f05aa8 75%, #ff9a3c 100%);
 
   /* Status */
   --success: #0b7f56;
