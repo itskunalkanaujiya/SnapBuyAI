@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Icon from "./Icon.jsx";
 
 const STEPS = [
@@ -131,6 +131,66 @@ function HowItWorks() {
   );
 }
 
+// Facts about SnapBuy, counted up when the band scrolls into view.
+const STATS = [
+  { value: 10, label: "AI shopping tools", tone: "violet" },
+  { value: 40, label: "listings checked per search", tone: "pink" },
+  { value: 3, label: "languages: English, Hindi, Hinglish", tone: "amber" },
+  { value: 0, prefix: "₹", label: "to use, no sign-up", tone: "teal" },
+];
+const COUNT_MS = 1200;
+
+/** A number that counts up from 0 the first time it is on screen. */
+function CountUp({ value, prefix = "" }) {
+  const ref = useRef(null);
+  const [shown, setShown] = useState(0);
+
+  useEffect(() => {
+    const node = ref.current;
+    if (!node || !value) return undefined;
+    let frame;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) return;
+      observer.disconnect();
+      const start = performance.now();
+      const tick = (now) => {
+        const progress = Math.min(1, (now - start) / COUNT_MS);
+        setShown(Math.round(value * (1 - Math.pow(1 - progress, 3))));
+        if (progress < 1) frame = requestAnimationFrame(tick);
+      };
+      frame = requestAnimationFrame(tick);
+    });
+    observer.observe(node);
+    return () => {
+      observer.disconnect();
+      cancelAnimationFrame(frame);
+    };
+  }, [value]);
+
+  return (
+    <span ref={ref}>
+      {prefix}
+      {shown}
+      {value >= 10 ? "+" : ""}
+    </span>
+  );
+}
+
+function StatsBand() {
+  return (
+    <section className="container stats-band" aria-label="SnapBuy in numbers">
+      {STATS.map((stat) => (
+        <div key={stat.label} className={`stat-item tone-${stat.tone}`}>
+          <strong>
+            <CountUp value={stat.value} prefix={stat.prefix} />
+          </strong>
+          <span>{stat.label}</span>
+        </div>
+      ))}
+    </section>
+  );
+}
+
 // Questions shown before "More questions".
 const FAQ_SHOWN = 5;
 
@@ -139,14 +199,11 @@ function Faq() {
   const questions = showAll ? FAQS : FAQS.slice(0, FAQ_SHOWN);
 
   return (
-    <section className="landing-section container faq" aria-labelledby="faq-title">
+    <section className="landing-section container faq faq-centred" aria-labelledby="faq-title">
       <div className="faq-intro reveal">
-        <span className="eyebrow">FAQ</span>
+        <span className="tool-hub-kicker">Good to know</span>
         <h2 id="faq-title">Questions, answered</h2>
-        <p>
-          Everything you need to know about how SnapBuy finds products and
-          prices.
-        </p>
+        <p>How SnapBuy finds products, what happens to your photos, and more.</p>
       </div>
 
       <div className="faq-list reveal">
@@ -173,6 +230,7 @@ export default function Landing() {
   useReveal();
   return (
     <>
+      <StatsBand />
       <HowItWorks />
       <Faq />
     </>

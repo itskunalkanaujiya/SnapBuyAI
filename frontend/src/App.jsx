@@ -7,6 +7,7 @@ import ProductCard from "./components/ProductCard.jsx";
 import RecentSearches from "./components/RecentSearches.jsx";
 import HomeSearch from "./components/HomeSearch.jsx";
 import ToolGrid from "./components/ToolGrid.jsx";
+import Emoji3D from "./components/Emoji3D.jsx";
 import { HeroBackdrop, StoreMarquee } from "./components/HeroDecor.jsx";
 import { resetPointer, trackPointer, useTheme } from "./lib/motion.js";
 import { TOOLS } from "./lib/tools.js";
@@ -81,11 +82,18 @@ function readSaved() {
 const PHOTO_TOOLS = { photo: "product", outfit: "outfit", rate: "rate", room: "room", list: "list" };
 const PURPOSE_TOOLS = Object.fromEntries(Object.entries(PHOTO_TOOLS).map(([tool, purpose]) => [purpose, tool]));
 
+// The footer's links to every tool.
+const FOOTER_LINKS = [
+  { title: "Shop", keys: ["photo", "list", "plan", "gift"] },
+  { title: "Style", keys: ["outfit", "rate", "colours", "tryon"] },
+  { title: "More", keys: ["room", "watch"] },
+];
+
 // Try it on: example searches whose results can be tried on.
 const TRY_ON_EXAMPLES = [
-  { query: "Cotton kurti for women", icon: "shirt", label: "Clothes", text: "A kurti, shirt or dress on your photo (AI, about 30 s)" },
-  { query: "Aviator sunglasses for men", icon: "sparkles", label: "Sunglasses", text: "The real frames placed on your face photo" },
-  { query: "Analog watch for men", icon: "clock", label: "Watches", text: "The real watch placed on your wrist photo" },
+  { query: "Cotton kurti for women", art: "dress", label: "Clothes", text: "A kurti, shirt or dress on your photo (AI, about 30 s)" },
+  { query: "Aviator sunglasses for men", art: "sunglasses", label: "Sunglasses", text: "The real frames placed on your face photo" },
+  { query: "Analog watch for men", art: "watch", label: "Watches", text: "The real watch placed on your wrist photo" },
 ];
 
 // Search stages reported by the backend, in order (see UploadPanel).
@@ -997,7 +1005,7 @@ export default function App() {
                   </button>
                   <header className="tool-page-header">
                     <span className="tool-page-emoji" aria-hidden="true">
-                      {TOOLS[tool === "photo" ? PURPOSE_TOOLS[purpose] : tool].emoji}
+                      <Emoji3D name={TOOLS[tool === "photo" ? PURPOSE_TOOLS[purpose] : tool].art} size={46} />
                     </span>
                     <div>
                       <h1>{TOOLS[tool === "photo" ? PURPOSE_TOOLS[purpose] : tool].title}</h1>
@@ -1053,7 +1061,7 @@ export default function App() {
                           <li key={example.query}>
                             <button type="button" className="tool-card" onClick={() => searchText(example.query)}>
                               <span className="tool-card-icon" aria-hidden="true">
-                                <Icon name={example.icon} size={20} />
+                                <Emoji3D name={example.art} size={30} />
                               </span>
                               <span className="tool-card-text">
                                 <strong>{example.label}</strong>
@@ -1073,9 +1081,10 @@ export default function App() {
                 <HeroBackdrop />
                 <div className="container home-hero-inner">
                   <h1>
-                    Find it.
-                    <br />
-                    <span className="hero-gradient">For less.</span>
+                    <span className="hero-line">Find it.</span>
+                    <span className="hero-line">
+                      <span className="hero-gradient">For less.</span>
+                    </span>
                   </h1>
                   <p className="hero-lead">
                     Search with a photo, your words or your voice. SnapBuy checks every store and
@@ -1250,16 +1259,33 @@ export default function App() {
         ))}
 
       <footer className="site-footer">
-        <div className="container footer-quota">
-          <SearchQuota refreshKey={isSearching} />
+        <div className="container footer-top">
+          <div className="footer-brand">
+            <Logo />
+            <p>Your AI shopping assistant for India. Find it, compare every store, pay less.</p>
+            <SearchQuota refreshKey={isSearching} />
+          </div>
+          {FOOTER_LINKS.map((column) => (
+            <nav key={column.title} className="footer-column" aria-label={column.title}>
+              <h3>{column.title}</h3>
+              <ul>
+                {column.keys.map((key) => (
+                  <li key={key}>
+                    <button type="button" onClick={() => openTool(key)}>
+                      {TOOLS[key].title}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+          ))}
         </div>
-        <div className="container footer-inner">
-          <Logo />
+        <div className="container footer-bottom">
           <p>
-            Prices and availability come from third-party stores and may
-            change. Always confirm on the seller's site before buying.
+            Prices and availability come from third-party stores and may change. Always confirm on
+            the seller's site before buying.
           </p>
-          <span>© {new Date().getFullYear()} SnapBuy AI</span>
+          <span>© {new Date().getFullYear()} SnapBuy AI · Made in India</span>
         </div>
       </footer>
       {/* Phones: app-style navigation at the bottom. */}

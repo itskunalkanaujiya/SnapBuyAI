@@ -1,10 +1,12 @@
+import Emoji3D from "./Emoji3D.jsx";
+
 // Decoration for the home hero: soft colour blobs drifting behind it, and
 // little product cards floating around the search box (desktop only).
 const FLOATERS = [
-  { emoji: "👟", name: "Running shoes", price: "₹2,596", tag: "−48%", tone: "violet", spot: "a" },
-  { emoji: "⌚", name: "Analog watch", price: "₹1,155", tag: "Best price", tone: "teal", spot: "b" },
-  { emoji: "👗", name: "Cotton kurti", price: "₹394", tag: "Great deal", tone: "pink", spot: "c" },
-  { emoji: "🎁", name: "Gift ideas", price: "6 picks", tag: "Under ₹2k", tone: "amber", spot: "d" },
+  { art: "shoe", name: "Running shoes", price: "₹2,596", tag: "−48%", tone: "violet", spot: "a" },
+  { art: "watch", name: "Analog watch", price: "₹1,155", tag: "Best price", tone: "teal", spot: "b" },
+  { art: "dress", name: "Cotton kurti", price: "₹394", tag: "Great deal", tone: "pink", spot: "c" },
+  { art: "gift", name: "Gift ideas", price: "6 picks", tag: "Under ₹2k", tone: "amber", spot: "d" },
 ];
 
 const STORES = ["Amazon", "Flipkart", "Myntra", "AJIO", "Meesho", "Nykaa", "Tata CLiQ", "Croma", "IndiaMART", "Lenskart"];
@@ -20,7 +22,9 @@ export function HeroBackdrop() {
       <span className="blob blob-4" />
       {FLOATERS.map((card) => (
         <span key={card.spot} className={`floater floater-${card.spot} tone-${card.tone}`}>
-          <span className="floater-emoji">{card.emoji}</span>
+          <span className="floater-emoji">
+            <Emoji3D name={card.art} size={32} />
+          </span>
           <span className="floater-text">
             <strong>{card.name}</strong>
             <small>{card.price}</small>

@@ -292,3 +292,9 @@ host.
   automated price checks, so a few listings show "Price on store".
 - On Windows, run uvicorn **without** `--reload`; the auto-reloader can stall
   and keep serving old code.
+
+## Credits
+
+The 3D emoji pictures in `frontend/public/emoji/` are from Microsoft's
+[Fluent Emoji](https://github.com/microsoft/fluentui-emoji), used under the
+MIT licence (Copyright (c) Microsoft Corporation).

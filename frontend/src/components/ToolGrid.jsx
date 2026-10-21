@@ -1,4 +1,5 @@
 import Icon from "./Icon.jsx";
+import Emoji3D from "./Emoji3D.jsx";
 import { TOOL_LIST } from "../lib/tools.js";
 import { resetPointer, trackPointer } from "../lib/motion.js";
 
@@ -22,7 +23,7 @@ export default function ToolGrid({ onOpen }) {
             >
               <span className="tool-tile-glow" aria-hidden="true" />
               <span className="tool-tile-emoji" aria-hidden="true">
-                {tool.emoji}
+                <Emoji3D name={tool.art} size={tool.featured ? 52 : 40} />
               </span>
               <span className="tool-tile-text">
                 <strong>{tool.title}</strong>

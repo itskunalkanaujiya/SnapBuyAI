@@ -65,6 +65,13 @@ const DEAL_ICONS = { high: "alert", fake: "alert", real: "check" };
 export default function ProductCard({ product, isSaved, onToggleSave, onTryOn, onCompleteLook, highlight, deal, pick }) {
   const [imageFailed, setImageFailed] = useState(!product.image_url);
   const accessoryReady = useAccessoryReady(product, Boolean(onTryOn));
+  // A short burst on the heart or a ring of the bell when tapped on.
+  const [pop, setPop] = useState(null);
+  useEffect(() => {
+    if (!pop) return undefined;
+    const timer = setTimeout(() => setPop(null), 700);
+    return () => clearTimeout(timer);
+  }, [pop]);
   const suits = usePalette()?.suitsYou(product);
   const compare = useCompare();
   const watch = usePriceWatch();
@@ -146,8 +153,11 @@ export default function ProductCard({ product, isSaved, onToggleSave, onTryOn, o
         {canWatch && (
           <button
             type="button"
-            className={`watch-button ${watching ? "is-watching" : ""}`}
-            onClick={() => watch.toggle(product)}
+            className={`watch-button ${watching ? "is-watching" : ""} ${pop === "watch" ? "is-popping" : ""}`}
+            onClick={() => {
+              if (!watching) setPop("watch");
+              watch.toggle(product);
+            }}
             aria-pressed={watching}
             disabled={!watching && watch.isFull}
             aria-label={watching ? "Stop watching the price" : "Watch the price"}
@@ -165,8 +175,11 @@ export default function ProductCard({ product, isSaved, onToggleSave, onTryOn, o
 
         <button
           type="button"
-          className={`save-button ${isSaved ? "is-saved" : ""}`}
-          onClick={() => onToggleSave(product)}
+          className={`save-button ${isSaved ? "is-saved" : ""} ${pop === "save" ? "is-popping" : ""}`}
+          onClick={() => {
+            if (!isSaved) setPop("save");
+            onToggleSave(product);
+          }}
           aria-pressed={isSaved}
           aria-label={isSaved ? "Remove from saved" : "Save item"}
           title={isSaved ? "Remove from saved" : "Save item"}
