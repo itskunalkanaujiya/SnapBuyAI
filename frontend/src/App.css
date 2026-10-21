@@ -8015,14 +8015,439 @@ body {
   }
 }
 
+/* Reduced motion keeps colour and fades but stops things moving around:
+   no drifting, floating, sliding in or popping. */
 @media (prefers-reduced-motion: reduce) {
   .blob,
   .floater,
-  .hero-gradient,
-  .marquee-track,
-  .tool-bento li,
-  .tool-page-emoji,
-  .chat-launcher {
+  .tool-page-emoji {
     animation: none;
   }
+
+  .tool-bento li {
+    animation-name: tile-fade;
+  }
+
+  .marquee-track {
+    animation-duration: 90s;
+  }
+}
+
+@keyframes tile-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+/* =========================================================
+   Motion: spotlight, aurora, parallax, tilt, shine.
+   ========================================================= */
+
+@property --angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+/* The theme switch in the header. */
+.header-inner .nav {
+  margin-left: auto;
+}
+
+.theme-toggle {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  margin-left: 10px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  place-items: center;
+  transition: transform 0.4s var(--ease), border-color 0.2s var(--ease);
+}
+
+.theme-toggle:hover {
+  border-color: var(--primary);
+  transform: rotate(25deg);
+}
+
+/* A slow aurora and a spotlight that follows the pointer. */
+.hero-aurora {
+  position: absolute;
+  inset: -45%;
+  background: conic-gradient(
+    from 0deg at 50% 50%,
+    rgba(124, 92, 255, 0.16),
+    rgba(236, 72, 153, 0.12),
+    rgba(245, 158, 11, 0.08),
+    rgba(20, 184, 166, 0.12),
+    rgba(124, 92, 255, 0.16)
+  );
+  filter: blur(60px);
+  animation: spin 48s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.hero-spotlight {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(520px circle at var(--mx, 50%) var(--my, 35%), rgba(139, 109, 255, 0.16), transparent 60%);
+}
+
+/* Floating cards drift with the pointer, each at its own depth. */
+.floater {
+  translate: calc(var(--px, 0) * var(--depth, 16px)) calc(var(--py, 0) * var(--depth, 16px));
+  transition: translate 0.6s var(--ease);
+}
+
+.floater-a { --depth: 22px; }
+.floater-b { --depth: -18px; }
+.floater-c { --depth: 14px; }
+.floater-d { --depth: -24px; }
+
+/* The search box: a slowly turning rainbow ring. */
+.home-search-bar {
+  background:
+    linear-gradient(var(--surface), var(--surface)) padding-box,
+    conic-gradient(from var(--angle), #7c5cff, #ec4899, #f59e0b, #14b8a6, #7c5cff) border-box;
+  animation: ring-turn 6s linear infinite;
+}
+
+.home-search-bar:focus-within {
+  background:
+    linear-gradient(var(--surface), var(--surface)) padding-box,
+    conic-gradient(from var(--angle), #7c5cff, #ec4899, #f59e0b, #14b8a6, #7c5cff) border-box;
+  animation-duration: 2.5s;
+}
+
+@keyframes ring-turn {
+  to {
+    --angle: 360deg;
+  }
+}
+
+/* Tiles tilt towards the pointer, with a glow that follows it. */
+.tool-tile {
+  transform: perspective(900px) rotateX(calc(var(--py, 0) * -6deg)) rotateY(calc(var(--px, 0) * 8deg));
+  transform-style: preserve-3d;
+  transition:
+    transform 0.25s var(--ease),
+    box-shadow 0.3s var(--ease);
+}
+
+.tool-tile:hover {
+  transform: perspective(900px) rotateX(calc(var(--py, 0) * -6deg)) rotateY(calc(var(--px, 0) * 8deg))
+    translateY(-6px);
+}
+
+.tool-tile::after {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(280px circle at var(--mx, 50%) var(--my, 50%), rgba(255, 255, 255, 0.45), transparent 60%);
+  content: "";
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s var(--ease);
+}
+
+.tool-tile:hover::after {
+  opacity: 1;
+}
+
+/* A sweep of light across main buttons. */
+.button-primary {
+  position: relative;
+  overflow: hidden;
+}
+
+.button-primary::after {
+  position: absolute;
+  top: 0;
+  left: -70%;
+  width: 45%;
+  height: 100%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.45), transparent);
+  content: "";
+  pointer-events: none;
+  transform: skewX(-20deg);
+  transition: left 0.7s var(--ease);
+}
+
+.button-primary:hover:not(:disabled)::after {
+  left: 130%;
+}
+
+/* =========================================================
+   Dark theme: the colourful design on a deep night background.
+   ========================================================= */
+
+:root[data-theme="dark"] body,
+:root[data-theme="dark"] .home-hero,
+:root[data-theme="dark"] .landing-band {
+  background: var(--bg);
+}
+
+:root[data-theme="dark"] .site-header {
+  border-bottom-color: rgba(255, 255, 255, 0.06);
+  background: rgba(8, 8, 15, 0.72);
+}
+
+:root[data-theme="dark"] [class*="tone-"] {
+  --tone-soft: color-mix(in srgb, var(--tone) 15%, #11111b);
+  --tone-2: color-mix(in srgb, var(--tone) 60%, transparent);
+}
+
+:root[data-theme="dark"] .blob {
+  opacity: 0.32;
+  mix-blend-mode: screen;
+}
+
+:root[data-theme="dark"] .hero-aurora {
+  opacity: 1.4;
+  filter: blur(70px) saturate(1.3);
+}
+
+:root[data-theme="dark"] .hero-spotlight {
+  background: radial-gradient(560px circle at var(--mx, 50%) var(--my, 35%), rgba(139, 109, 255, 0.22), transparent 60%);
+}
+
+:root[data-theme="dark"] .home-hero::after {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+  background-size: 26px 26px;
+  content: "";
+  -webkit-mask-image: radial-gradient(70% 70% at 50% 40%, #000, transparent 75%);
+  mask-image: radial-gradient(70% 70% at 50% 40%, #000, transparent 75%);
+  pointer-events: none;
+}
+
+:root[data-theme="dark"] .floater {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(22, 22, 35, 0.72);
+  box-shadow: 0 22px 48px -22px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(139, 109, 255, 0.08);
+}
+
+:root[data-theme="dark"] .home-search-bar {
+  box-shadow: 0 0 40px -10px rgba(139, 109, 255, 0.45), 0 24px 56px -24px rgba(0, 0, 0, 0.9);
+}
+
+:root[data-theme="dark"] .home-search-examples button {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-2);
+}
+
+:root[data-theme="dark"] .home-search-examples button:nth-child(2) {
+  background: rgba(124, 92, 255, 0.16);
+  color: #c4b5fd;
+}
+
+:root[data-theme="dark"] .home-search-examples button:nth-child(3) {
+  background: rgba(236, 72, 153, 0.16);
+  color: #f9a8d4;
+}
+
+:root[data-theme="dark"] .home-search-examples button:nth-child(4) {
+  background: rgba(245, 158, 11, 0.16);
+  color: #fcd34d;
+}
+
+:root[data-theme="dark"] .marquee-track li {
+  color: #6f6f88;
+}
+
+:root[data-theme="dark"] .tool-tile {
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+:root[data-theme="dark"] .tool-tile::after {
+  background: radial-gradient(280px circle at var(--mx, 50%) var(--my, 50%), color-mix(in srgb, var(--tone) 35%, transparent), transparent 65%);
+}
+
+:root[data-theme="dark"] .tool-tile:hover {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--tone) 50%, transparent), 0 28px 56px -24px var(--tone);
+}
+
+:root[data-theme="dark"] .tool-tile-emoji,
+:root[data-theme="dark"] .tool-page-emoji {
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 12px 28px -12px var(--tone, #7c5cff);
+}
+
+:root[data-theme="dark"] .tool-page {
+  background:
+    radial-gradient(70% 90% at 100% 0%, color-mix(in srgb, var(--tone, #7c5cff) 30%, transparent) 0%, transparent 60%),
+    linear-gradient(180deg, color-mix(in srgb, var(--tone, #7c5cff) 10%, var(--bg)) 0%, var(--bg) 75%);
+}
+
+:root[data-theme="dark"] .tool-page .panel,
+:root[data-theme="dark"] .panel {
+  border-color: rgba(255, 255, 255, 0.07);
+  background: rgba(17, 17, 27, 0.85);
+  box-shadow: 0 30px 60px -32px rgba(0, 0, 0, 0.9);
+  backdrop-filter: blur(10px);
+}
+
+:root[data-theme="dark"] .field:focus,
+:root[data-theme="dark"] .field:focus-within {
+  background: var(--surface);
+}
+
+:root[data-theme="dark"] .button-secondary,
+:root[data-theme="dark"] .card-cta {
+  border-color: var(--border-strong);
+  background: transparent;
+  color: var(--text);
+}
+
+:root[data-theme="dark"] .button-primary:disabled {
+  background: #1f1f2e;
+  color: #6f6f88;
+}
+
+:root[data-theme="dark"] .save-button,
+:root[data-theme="dark"] .watch-button {
+  background: rgba(17, 17, 27, 0.85);
+  color: #e6e6ef;
+}
+
+:root[data-theme="dark"] .card-media {
+  background: #f4f4f6;
+}
+
+:root[data-theme="dark"] .card:hover .card-media {
+  box-shadow: 0 0 0 1px rgba(139, 109, 255, 0.4), 0 24px 44px -20px rgba(139, 109, 255, 0.7);
+}
+
+:root[data-theme="dark"] .toolbar {
+  border-bottom-color: var(--border);
+  background: rgba(8, 8, 15, 0.85);
+}
+
+:root[data-theme="dark"] .dupes-section {
+  background:
+    radial-gradient(60% 120% at 100% 0%, rgba(236, 72, 153, 0.18) 0%, transparent 60%),
+    var(--surface-2);
+}
+
+:root[data-theme="dark"] .deal {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+:root[data-theme="dark"] .deal-great,
+:root[data-theme="dark"] .deal-real {
+  background: rgba(63, 207, 146, 0.12);
+}
+
+:root[data-theme="dark"] .deal-good {
+  background: rgba(45, 212, 191, 0.12);
+}
+
+:root[data-theme="dark"] .deal-high {
+  background: rgba(251, 191, 36, 0.12);
+}
+
+:root[data-theme="dark"] .deal-fake {
+  background: rgba(255, 107, 130, 0.14);
+}
+
+:root[data-theme="dark"] .deal-dupe {
+  background: rgba(139, 109, 255, 0.16);
+}
+
+:root[data-theme="dark"] .timeline-step:nth-child(1) .timeline-marker { background: rgba(124, 92, 255, 0.16); }
+:root[data-theme="dark"] .timeline-step:nth-child(2) .timeline-marker { background: rgba(236, 72, 153, 0.16); }
+:root[data-theme="dark"] .timeline-step:nth-child(3) .timeline-marker { background: rgba(245, 158, 11, 0.16); }
+
+:root[data-theme="dark"] .tab-bar {
+  border-top-color: rgba(255, 255, 255, 0.06);
+  background: rgba(8, 8, 15, 0.88);
+}
+
+:root[data-theme="dark"] .compare-bar,
+:root[data-theme="dark"] .chat-panel {
+  border-color: var(--border);
+  background: var(--surface);
+}
+
+:root[data-theme="dark"] .purpose-option {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+:root[data-theme="dark"] .dropzone {
+  border-color: var(--border-strong);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+:root[data-theme="dark"] .outfit-summary,
+:root[data-theme="dark"] .modal {
+  border-color: var(--border);
+  background: var(--surface);
+}
+
+@media (max-width: 640px) {
+  .theme-toggle {
+    position: absolute;
+    right: 16px;
+  }
+
+  .header-inner {
+    position: relative;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-aurora {
+    animation-duration: 120s;
+  }
+
+  .floater,
+  .tool-tile,
+  .tool-tile:hover {
+    translate: none;
+    transform: none;
+  }
+}
+
+/* Dark: deep, saturated colour clouds (pastels look grey on black), and a
+   soft fade where the hero meets the page. */
+:root[data-theme="dark"] .blob {
+  opacity: 0.42;
+  mix-blend-mode: normal;
+}
+
+:root[data-theme="dark"] .blob-1 {
+  background: #5b21b6;
+}
+
+:root[data-theme="dark"] .blob-2 {
+  background: #be185d;
+}
+
+:root[data-theme="dark"] .blob-3 {
+  background: #b45309;
+  opacity: 0.3;
+}
+
+:root[data-theme="dark"] .blob-4 {
+  background: #0f766e;
+  opacity: 0.34;
+}
+
+:root[data-theme="dark"] .hero-backdrop::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 160px;
+  background: linear-gradient(180deg, transparent, var(--bg));
+  content: "";
 }

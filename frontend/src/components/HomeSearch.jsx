@@ -1,6 +1,16 @@
 import { useRef, useState } from "react";
 import Icon from "./Icon.jsx";
 import { VOICE_LANGUAGES, useVoiceSearch, voiceSupported } from "../lib/voice.js";
+import { useTypewriter } from "../lib/motion.js";
+
+// Typed into the empty search box, one after another, to show what works.
+const TYPED_IDEAS = [
+  "running shoes under ₹3,000",
+  "8GB RAM wala laptop 50k ke andar",
+  "gift for my sister who loves skincare",
+  "black cat-eye sunglasses",
+  "wedding outfit for men under 5k",
+];
 
 const EXAMPLES = [
   "HP laptop with 16GB RAM under 60k",
@@ -22,6 +32,8 @@ export default function HomeSearch({ query, onQueryChange, onSearch, onPhoto, is
     if (isFinal && text.trim().length >= 2) onSearch(text.trim());
   });
   const hindi = language === "hi-IN";
+  const [focused, setFocused] = useState(false);
+  const typed = useTypewriter(TYPED_IDEAS, !query && !focused && !voice.listening);
 
   return (
     <div className="home-search">
@@ -36,7 +48,9 @@ export default function HomeSearch({ query, onQueryChange, onSearch, onPhoto, is
         <input
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
-          placeholder={voice.listening ? "Listening… say what you want to buy" : "Search for anything"}
+          placeholder={voice.listening ? "Listening… say what you want to buy" : typed || "Search for anything"}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
           aria-label="What are you looking for?"
           maxLength={150}
           enterKeyHint="search"

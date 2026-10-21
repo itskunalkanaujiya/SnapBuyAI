@@ -8,6 +8,7 @@ import RecentSearches from "./components/RecentSearches.jsx";
 import HomeSearch from "./components/HomeSearch.jsx";
 import ToolGrid from "./components/ToolGrid.jsx";
 import { HeroBackdrop, StoreMarquee } from "./components/HeroDecor.jsx";
+import { resetPointer, trackPointer, useTheme } from "./lib/motion.js";
 import { TOOLS } from "./lib/tools.js";
 import TryOnDialog from "./components/TryOnDialog.jsx";
 import AccessoryTryOnDialog from "./components/AccessoryTryOnDialog.jsx";
@@ -126,6 +127,7 @@ export default function App() {
   // The tool page open (null = home with the search box and every tool),
   // and what the photo is for on the photo page.
   const [tool, setTool] = useState(null);
+  const [theme, toggleTheme] = useTheme();
   const [purpose, setPurpose] = useState("product");
   const [tryOnProduct, setTryOnProduct] = useState(null);
   const [textQuery, setTextQuery] = useState("");
@@ -940,6 +942,15 @@ export default function App() {
               )}
             </button>
           </nav>
+          <button
+            type="button"
+            className="theme-toggle"
+            onClick={toggleTheme}
+            aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+            title={theme === "dark" ? "Light theme" : "Dark theme"}
+          >
+            <Icon name={theme === "dark" ? "sun" : "moon"} size={18} />
+          </button>
         </div>
       </header>
 
@@ -1058,7 +1069,7 @@ export default function App() {
                 </div>
               </section>
             ) : (
-              <section className="home-hero">
+              <section className="home-hero" onPointerMove={trackPointer} onPointerLeave={resetPointer}>
                 <HeroBackdrop />
                 <div className="container home-hero-inner">
                   <h1>

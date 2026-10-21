@@ -96,6 +96,38 @@
   }
 }
 
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #08080f;
+  --surface: #11111b;
+  --surface-2: #161623;
+  --surface-sunken: #1c1c2b;
+  --media-bg: #f4f4f6;
+  --border: #24243a;
+  --border-strong: #33334e;
+
+  --text: #f3f3f8;
+  --text-2: #b6b6c8;
+  --text-3: #7f7f98;
+
+  --primary: #8b6dff;
+  --primary-hover: #9d84ff;
+  --primary-soft: rgba(139, 109, 255, 0.16);
+  --primary-text: #bba9ff;
+  --ring: rgba(139, 109, 255, 0.4);
+
+  --success: #3fcf92;
+  --success-soft: rgba(63, 207, 146, 0.12);
+  --danger: #ff6b82;
+  --danger-soft: rgba(255, 107, 130, 0.12);
+  --neutral-soft: rgba(255, 255, 255, 0.06);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 1px 2px rgba(0, 0, 0, 0.5), 0 12px 30px -12px rgba(0, 0, 0, 0.7);
+  --shadow-lg: 0 2px 6px rgba(0, 0, 0, 0.5), 0 30px 60px -20px rgba(0, 0, 0, 0.8);
+}
+
 *,
 *::before,
 *::after {

@@ -12,6 +12,8 @@ const STORES = ["Amazon", "Flipkart", "Myntra", "AJIO", "Meesho", "Nykaa", "Tata
 export function HeroBackdrop() {
   return (
     <div className="hero-backdrop" aria-hidden="true">
+      <span className="hero-aurora" />
+      <span className="hero-spotlight" />
       <span className="blob blob-1" />
       <span className="blob blob-2" />
       <span className="blob blob-3" />

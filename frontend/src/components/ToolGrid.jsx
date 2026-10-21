@@ -1,5 +1,6 @@
 import Icon from "./Icon.jsx";
 import { TOOL_LIST } from "../lib/tools.js";
+import { resetPointer, trackPointer } from "../lib/motion.js";
 
 /** "What would you like to do?": every tool as a colourful tile. */
 export default function ToolGrid({ onOpen }) {
@@ -12,7 +13,13 @@ export default function ToolGrid({ onOpen }) {
       <ul className="tool-bento">
         {TOOL_LIST.map((tool, index) => (
           <li key={tool.key} className={tool.featured ? "is-featured" : ""} style={{ "--i": index }}>
-            <button type="button" className={`tool-tile tone-${tool.tone}`} onClick={() => onOpen(tool.key)}>
+            <button
+              type="button"
+              className={`tool-tile tone-${tool.tone}`}
+              onClick={() => onOpen(tool.key)}
+              onPointerMove={trackPointer}
+              onPointerLeave={resetPointer}
+            >
               <span className="tool-tile-glow" aria-hidden="true" />
               <span className="tool-tile-emoji" aria-hidden="true">
                 {tool.emoji}
