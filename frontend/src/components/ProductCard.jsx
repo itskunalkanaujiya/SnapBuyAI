@@ -263,28 +263,31 @@ export default function ProductCard({ product, isSaved, onToggleSave, onTryOn, o
           </button>
         )}
 
-        {compare && (
-          <label className={`card-compare ${comparing ? "is-checked" : ""}`}>
-            <input
-              type="checkbox"
-              checked={comparing}
-              disabled={!comparing && compare.isFull}
-              onChange={() => compare.toggle(product)}
-            />
-            {comparing ? "Comparing" : compare.isFull ? "Compare (3 max)" : "Compare"}
-          </label>
-        )}
-
-        {onCompleteLook && product.name && (
-          <button
-            type="button"
-            className="card-look"
-            onClick={() => onCompleteLook(product)}
-            title="AI suggests what goes with this, with shopping options"
-          >
-            <Icon name="sparkles" size={13} />
-            Complete the look
-          </button>
+        {(compare || (onCompleteLook && product.name)) && (
+          <div className="card-extras">
+            {compare && (
+              <label className={`card-compare ${comparing ? "is-checked" : ""}`}>
+                <input
+                  type="checkbox"
+                  checked={comparing}
+                  disabled={!comparing && compare.isFull}
+                  onChange={() => compare.toggle(product)}
+                />
+                {comparing ? "Comparing" : "Compare"}
+              </label>
+            )}
+            {onCompleteLook && product.name && (
+              <button
+                type="button"
+                className="card-look"
+                onClick={() => onCompleteLook(product)}
+                title="AI suggests what goes with this, with shopping options"
+              >
+                <Icon name="sparkles" size={13} />
+                Complete look
+              </button>
+            )}
+          </div>
         )}
       </div>
     </article>

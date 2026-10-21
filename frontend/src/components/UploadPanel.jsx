@@ -1,6 +1,14 @@
 import { useRef, useState } from "react";
 import Icon from "./Icon.jsx";
 
+const LIST_EXAMPLE = [
+  "Diwali list:",
+  "kurta for papa",
+  "saree for mummy, 3000 tak",
+  "2 diya sets",
+  "dry fruit gift box",
+].join("\n");
+
 // One step per search stage reported by the backend. Within a stage the
 // bar eases from `from` towards `to` (it never stalls, never overshoots);
 // `seconds` is the stage's typical length, which sets the easing speed.
@@ -72,6 +80,55 @@ function SearchProgress({ stage, stageElapsed, isComplete, identifiedQuery }) {
   );
 }
 
+// What a photo can be used for; the chosen one sets the button and the hints.
+const PURPOSES = [
+  {
+    key: "product",
+    icon: "search",
+    label: "Find this product",
+    hint: "Every store selling it, cheapest first",
+    action: "Find matching products",
+    busy: "Searching",
+    drop: "a product photo or screenshot",
+  },
+  {
+    key: "outfit",
+    icon: "shirt",
+    label: "Find the outfit",
+    hint: "Shop each item the person is wearing",
+    action: "Find the outfit",
+    busy: "Finding the outfit…",
+    drop: "a photo of someone's outfit",
+  },
+  {
+    key: "rate",
+    icon: "star",
+    label: "Rate my outfit",
+    hint: "A style score and tips to improve it",
+    action: "Rate my outfit",
+    busy: "Rating your outfit…",
+    drop: "a photo of your outfit, ideally full length",
+  },
+  {
+    key: "room",
+    icon: "box",
+    label: "Shop this room",
+    hint: "Furniture, lighting and decor in the photo",
+    action: "Shop this room",
+    busy: "Shopping the room…",
+    drop: "a photo of a room",
+  },
+  {
+    key: "list",
+    icon: "bag",
+    label: "Shop my list",
+    hint: "A handwritten list or chat screenshot",
+    action: "Shop my list",
+    busy: "Reading your list…",
+    drop: "a photo of your shopping list",
+  },
+];
+
 function formatFileSize(bytes) {
   return bytes >= 1024 * 1024
     ? `${(bytes / 1024 / 1024).toFixed(1)} MB`
@@ -79,7 +136,6 @@ function formatFileSize(bytes) {
 }
 
 export default function UploadPanel({
-  modeTabs,
   file,
   previewUrl,
   isSearching,
@@ -94,18 +150,23 @@ export default function UploadPanel({
   isCropped,
   onCrop,
   onUndoCrop,
-  onSearch,
-  onFindOutfit,
-  onRateOutfit,
-  onShopRoom,
-  onShopList,
-  isFindingOutfit = false,
-  busyKind = null,
+  purpose = "product",
+  onPurposeChange,
+  onRun,
+  isBusy = false,
+  onTypedList,
 }) {
   const inputRef = useRef(null);
   const cameraRef = useRef(null);
   const dragDepth = useRef(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [typing, setTyping] = useState(false);
+  const [listText, setListText] = useState("");
+  const chosen = PURPOSES.find((option) => option.key === purpose) || PURPOSES[0];
+  // A product search shows its own progress beside the photo.
+  const searching = isSearching && purpose === "product";
+  const working = isSearching || isBusy;
+  const typedList = purpose === "list" && typing;
 
   const openPicker = () => inputRef.current?.click();
 
@@ -125,260 +186,242 @@ export default function UploadPanel({
       event.preventDefault();
       dragDepth.current = 0;
       setIsDragging(false);
-      if (!isSearching) onSelect(event.dataTransfer.files?.[0]);
+      if (!working) onSelect(event.dataTransfer.files?.[0]);
     },
   };
 
   return (
-    <div className="panel search-panel">
-      {modeTabs}
-
-      <div className="panel-header">
-        <div>
-          <h2>Search by photo</h2>
-          <p>We'll identify the product and compare stores for you.</p>
-        </div>
-        <span className="pill pill-soft">
-          <Icon name="sparkles" size={13} />
-          AI
-        </span>
-      </div>
-
-      {previewUrl ? (
-        <div className={`preview ${isSearching ? "is-scanning" : ""}`} {...dragHandlers}>
-          <div className="preview-frame">
-            <img src={previewUrl} alt="Selected product" />
-            {isSearching && <span className="scan-line" aria-hidden="true" />}
-          </div>
-
-          <div className="preview-side">
-            {isSearching ? (
-              <SearchProgress
-                stage={stage}
-                stageElapsed={stageElapsed}
-                isComplete={isComplete}
-                identifiedQuery={identifiedQuery}
+    <div className="panel search-panel photo-tool">
+      <fieldset className="purpose-picker" disabled={working}>
+        <legend>What should we do with the photo?</legend>
+        <div className="purpose-options">
+          {PURPOSES.map((option) => (
+            <label key={option.key} className={`purpose-option ${purpose === option.key ? "is-active" : ""}`}>
+              <input
+                type="radio"
+                name="photo-purpose"
+                value={option.key}
+                checked={purpose === option.key}
+                onChange={() => onPurposeChange(option.key)}
               />
+              <Icon name={option.icon} size={17} />
+              <span>
+                <strong>{option.label}</strong>
+                <small>{option.hint}</small>
+              </span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
+      {typedList ? (
+        <form
+          className="typed-list"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (listText.trim().length >= 3 && !working) onTypedList(listText.trim());
+          }}
+        >
+          <textarea
+            className="plan-input list-input"
+            value={listText}
+            onChange={(event) => setListText(event.target.value)}
+            rows={6}
+            maxLength={2000}
+            placeholder={LIST_EXAMPLE}
+            aria-label="Your shopping list"
+          />
+          {error && (
+            <div className="alert alert-error" role="alert">
+              <Icon name="alert" size={17} />
+              <span>{error}</span>
+            </div>
+          )}
+          <button type="submit" className="button button-primary button-lg search-button" disabled={listText.trim().length < 3 || working}>
+            {isBusy ? (
+              <>
+                <span className="spinner spinner-light" />
+                {chosen.busy}
+              </>
             ) : (
               <>
-                <div className="file-chip">
-                  <Icon name="image" size={16} />
-                  <span className="file-name" title={file?.name}>
-                    {file?.name || "Selected image"}
-                  </span>
-                  {isCropped && <span className="pill pill-soft pill-xs">Cropped</span>}
-                  {file && <span className="file-size">{formatFileSize(file.size)}</span>}
-                </div>
-
-                <p className="preview-hint">
-                  {isCropped
-                    ? "Only the cropped area will be searched."
-                    : "Photo has other things in it? Crop to just the product for better matches."}
-                </p>
-
-                <div className="preview-actions">
-                  <button type="button" className="button button-secondary button-sm" onClick={onCrop}>
-                    <Icon name="crop" size={15} />
-                    {isCropped ? "Adjust crop" : "Crop"}
-                  </button>
-                  {isCropped && (
-                    <button type="button" className="button button-ghost button-sm" onClick={onUndoCrop}>
-                      <Icon name="undo" size={15} />
-                      Undo crop
-                    </button>
-                  )}
-                  <button type="button" className="button button-secondary button-sm" onClick={openPicker}>
-                    <Icon name="refresh" size={15} />
-                    Replace
-                  </button>
-                  <button type="button" className="button button-ghost button-sm" onClick={onRemove}>
-                    <Icon name="x" size={15} />
-                    Remove
-                  </button>
-                </div>
+                <Icon name="bag" size={18} />
+                Shop my list
               </>
             )}
-          </div>
-        </div>
+          </button>
+          <button type="button" className="link-button" onClick={() => setTyping(false)}>
+            <Icon name="camera" size={14} />
+            Use a photo of the list instead
+          </button>
+        </form>
       ) : (
-        <div
-          className={`dropzone ${isDragging ? "is-dragging" : ""}`}
-          role="button"
-          tabIndex={0}
-          onClick={openPicker}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
-              openPicker();
-            }
-          }}
-          {...dragHandlers}
-        >
-          <span className="dropzone-icon">
-            <Icon name="upload" size={22} />
-          </span>
-          <p className="dropzone-title">
-            <span className="only-pointer">
-              <strong>Click to upload</strong> or drag and drop
-            </span>
-            <span className="only-touch">
-              <strong>Tap to choose a photo</strong>
-            </span>
-          </p>
-          <p className="dropzone-subtitle">JPG, PNG or WebP · up to 8 MB</p>
-          <p className="dropzone-paste only-pointer">
-            <Icon name="clipboard" size={13} />
-            You can also paste an image with <kbd>Ctrl</kbd> + <kbd>V</kbd>
-          </p>
-        </div>
+        <>
+          {previewUrl ? (
+            <div className={`preview ${working ? "is-scanning" : ""}`} {...dragHandlers}>
+              <div className="preview-frame">
+                <img src={previewUrl} alt="Your photo" />
+                {working && <span className="scan-line" aria-hidden="true" />}
+              </div>
+
+              <div className="preview-side">
+                {searching ? (
+                  <SearchProgress
+                    stage={stage}
+                    stageElapsed={stageElapsed}
+                    isComplete={isComplete}
+                    identifiedQuery={identifiedQuery}
+                  />
+                ) : (
+                  <>
+                    <div className="file-chip">
+                      <Icon name="image" size={16} />
+                      <span className="file-name" title={file?.name}>
+                        {file?.name || "Your photo"}
+                      </span>
+                      {isCropped && <span className="pill pill-soft pill-xs">Cropped</span>}
+                      {file && <span className="file-size">{formatFileSize(file.size)}</span>}
+                    </div>
+
+                    {purpose === "product" && (
+                      <p className="preview-hint">
+                        {isCropped
+                          ? "Only the cropped area will be searched."
+                          : "Other things in the photo? Crop to just the product for better matches."}
+                      </p>
+                    )}
+
+                    <div className="preview-actions">
+                      {purpose === "product" && (
+                        <button type="button" className="button button-secondary button-sm" onClick={onCrop} disabled={working}>
+                          <Icon name="crop" size={15} />
+                          {isCropped ? "Adjust crop" : "Crop"}
+                        </button>
+                      )}
+                      {isCropped && (
+                        <button type="button" className="button button-ghost button-sm" onClick={onUndoCrop} disabled={working}>
+                          <Icon name="undo" size={15} />
+                          Undo crop
+                        </button>
+                      )}
+                      <button type="button" className="button button-secondary button-sm" onClick={openPicker} disabled={working}>
+                        <Icon name="refresh" size={15} />
+                        Replace
+                      </button>
+                      <button type="button" className="button button-ghost button-sm" onClick={onRemove} disabled={working}>
+                        <Icon name="x" size={15} />
+                        Remove
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div
+              className={`dropzone ${isDragging ? "is-dragging" : ""}`}
+              role="button"
+              tabIndex={0}
+              onClick={openPicker}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  openPicker();
+                }
+              }}
+              {...dragHandlers}
+            >
+              <span className="dropzone-icon">
+                <Icon name="upload" size={22} />
+              </span>
+              <p className="dropzone-title">
+                <span className="only-pointer">
+                  <strong>Upload {chosen.drop}</strong>
+                </span>
+                <span className="only-touch">
+                  <strong>Tap to choose {chosen.drop}</strong>
+                </span>
+              </p>
+              <p className="dropzone-subtitle">Click, drag and drop, or paste · JPG, PNG or WebP · up to 8 MB</p>
+            </div>
+          )}
+
+          {!previewUrl && (
+            <button
+              type="button"
+              className="button button-secondary camera-button only-touch"
+              onClick={() => cameraRef.current?.click()}
+            >
+              <Icon name="camera" size={18} />
+              Take a photo
+            </button>
+          )}
+
+          <input
+            ref={cameraRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            hidden
+            onChange={(event) => {
+              onSelect(event.target.files?.[0]);
+              event.target.value = "";
+            }}
+          />
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            hidden
+            onChange={(event) => {
+              onSelect(event.target.files?.[0]);
+              event.target.value = "";
+            }}
+          />
+
+          {error && (
+            <div className="alert alert-error" role="alert">
+              <Icon name="alert" size={17} />
+              <span>{error}</span>
+            </div>
+          )}
+
+          <button
+            type="button"
+            className={`button button-primary button-lg search-button ${working ? "is-loading" : ""}`}
+            onClick={() => onRun(purpose)}
+            disabled={!file || working}
+          >
+            {searching ? (
+              <>
+                {isComplete ? <Icon name="check" size={18} /> : <span className="spinner spinner-light" />}
+                {isComplete ? "Done" : `Searching… ${Math.floor(elapsed)}s`}
+              </>
+            ) : working ? (
+              <>
+                <span className="spinner spinner-light" />
+                {chosen.busy}
+              </>
+            ) : (
+              <>
+                <Icon name={chosen.icon} size={18} />
+                {chosen.action}
+              </>
+            )}
+          </button>
+
+          {purpose === "list" && (
+            <button type="button" className="link-button" onClick={() => setTyping(true)}>
+              <Icon name="pencil" size={14} />
+              No photo? Type your list instead
+            </button>
+          )}
+        </>
       )}
-
-      {!previewUrl && (
-        <button
-          type="button"
-          className="button button-secondary camera-button only-touch"
-          onClick={() => cameraRef.current?.click()}
-        >
-          <Icon name="camera" size={18} />
-          Take a photo
-        </button>
-      )}
-
-      {/* Opens the rear camera directly on phones and tablets. */}
-      <input
-        ref={cameraRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        hidden
-        onChange={(event) => {
-          onSelect(event.target.files?.[0]);
-          event.target.value = "";
-        }}
-      />
-
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/jpeg,image/png,image/webp"
-        hidden
-        onChange={(event) => {
-          onSelect(event.target.files?.[0]);
-          event.target.value = "";
-        }}
-      />
-
-      {error && (
-        <div className="alert alert-error" role="alert">
-          <Icon name="alert" size={17} />
-          <span>{error}</span>
-        </div>
-      )}
-
-      <button
-        type="button"
-        className={`button button-primary button-lg search-button ${isSearching ? "is-loading" : ""}`}
-        onClick={onSearch}
-        disabled={!file || isSearching}
-      >
-        {isSearching ? (
-          <>
-            {isComplete ? <Icon name="check" size={18} /> : <span className="spinner spinner-light" />}
-            {isComplete ? "Done" : `Searching… ${Math.floor(elapsed)}s`}
-          </>
-        ) : (
-          <>
-            <Icon name="search" size={18} />
-            Find matching products
-          </>
-        )}
-      </button>
-
-      <div className="outfit-actions">
-        <button
-          type="button"
-          className="button button-secondary search-button outfit-button"
-          onClick={onFindOutfit}
-          disabled={!file || isSearching || isFindingOutfit}
-        >
-          {isFindingOutfit && busyKind === "outfit" ? (
-            <>
-              <span className="spinner" />
-              Finding the outfit…
-            </>
-          ) : (
-            <>
-              <Icon name="shirt" size={17} />
-              Find the outfit
-            </>
-          )}
-        </button>
-
-        <button
-          type="button"
-          className="button button-secondary search-button rate-button"
-          onClick={onRateOutfit}
-          disabled={!file || isSearching || isFindingOutfit}
-          title="AI stylist: a score for the look, and what to add or swap"
-        >
-          {isFindingOutfit && busyKind === "rating" ? (
-            <>
-              <span className="spinner" />
-              Rating…
-            </>
-          ) : (
-            <>
-              <Icon name="star" size={17} />
-              Rate my outfit
-            </>
-          )}
-        </button>
-
-        <button
-          type="button"
-          className="button button-secondary search-button room-button"
-          onClick={onShopRoom}
-          disabled={!file || isSearching || isFindingOutfit}
-          title="Find the furniture and decor in a room photo"
-        >
-          {isFindingOutfit && busyKind === "room" ? (
-            <>
-              <span className="spinner" />
-              Shopping the room…
-            </>
-          ) : (
-            <>
-              <Icon name="box" size={17} />
-              Shop this room
-            </>
-          )}
-        </button>
-
-        <button
-          type="button"
-          className="button button-secondary search-button list-button"
-          onClick={onShopList}
-          disabled={!file || isSearching || isFindingOutfit}
-          title="Read a handwritten list or a chat screenshot and find every item"
-        >
-          {isFindingOutfit && busyKind === "list" ? (
-            <>
-              <span className="spinner" />
-              Reading the list…
-            </>
-          ) : (
-            <>
-              <Icon name="bag" size={17} />
-              Shop my list
-              <span className="new-pill">New</span>
-            </>
-          )}
-        </button>
-      </div>
 
       <p className="panel-footnote">
         <Icon name="shield" size={13} />
-        Your photo is sent to Google Lens (or, for the outfit features, an AI model) only to run this search, and isn't kept.
+        Your photo is only used for this search and isn't kept.
       </p>
     </div>
   );

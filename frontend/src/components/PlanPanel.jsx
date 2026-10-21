@@ -19,7 +19,7 @@ const EXAMPLES = [
  * Budget look planner: the occasion, who it's for and the budget. AI plans
  * the whole look and keeps the total within the budget.
  */
-export default function PlanPanel({ modeTabs, onPlan, isPlanning, error }) {
+export default function PlanPanel({ onPlan, isPlanning, error }) {
   const [request, setRequest] = useState("");
   const [budget, setBudget] = useState("");
   const [gender, setGender] = useState("");
@@ -38,15 +38,6 @@ export default function PlanPanel({ modeTabs, onPlan, isPlanning, error }) {
 
   return (
     <div className="panel search-panel plan-panel">
-      {modeTabs}
-
-      <div className="panel-header">
-        <div>
-          <h2>Plan a look on a budget</h2>
-          <p>Tell us the occasion and budget; AI plans every piece and keeps the total in budget.</p>
-        </div>
-      </div>
-
       <form
         onSubmit={(event) => {
           event.preventDefault();

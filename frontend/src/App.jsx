@@ -5,12 +5,13 @@ import Icon, { Logo } from "./components/Icon.jsx";
 import Landing from "./components/Landing.jsx";
 import ProductCard from "./components/ProductCard.jsx";
 import RecentSearches from "./components/RecentSearches.jsx";
-import TextSearchPanel, { SearchModeTabs } from "./components/TextSearchPanel.jsx";
+import HomeSearch from "./components/HomeSearch.jsx";
+import ToolGrid from "./components/ToolGrid.jsx";
+import { TOOLS } from "./lib/tools.js";
 import TryOnDialog from "./components/TryOnDialog.jsx";
 import AccessoryTryOnDialog from "./components/AccessoryTryOnDialog.jsx";
 import SearchQuota from "./components/SearchQuota.jsx";
 import OutfitView from "./components/OutfitView.jsx";
-import HeroHeadline from "./components/HeroHeadline.jsx";
 import ResultsView, { ResultsLoading } from "./components/ResultsView.jsx";
 import UploadPanel from "./components/UploadPanel.jsx";
 import {
@@ -74,25 +75,16 @@ function readSaved() {
   }
 }
 
-// Shortcuts in the hero: each opens the matching search panel.
-const WAYS = [
-  { mode: "photo", icon: "camera", label: "Photo search" },
-  { mode: "text", icon: "search", label: "Describe it" },
-  { mode: "outfit", icon: "shirt", label: "Find the outfit" },
-  { mode: "plan", icon: "tag", label: "Plan on a budget" },
-  { mode: "gift", icon: "heart", label: "Find a gift", isNew: true },
-  { mode: "room", icon: "box", label: "Shop a room" },
-  { mode: "tryon", icon: "sparkles", label: "Try it on" },
-];
+// Tools whose input is a photo, and the purpose each sets on the photo page.
+const PHOTO_TOOLS = { photo: "product", outfit: "outfit", rate: "rate", room: "room", list: "list" };
+const PURPOSE_TOOLS = Object.fromEntries(Object.entries(PHOTO_TOOLS).map(([tool, purpose]) => [purpose, tool]));
 
-const HIGHLIGHTS = [
-  { icon: "trendDown", text: "Lowest prices across stores" },
-  { icon: "sparkles", text: "AI that understands photos and sentences" },
-  { icon: "shield", text: "Free, no sign-up" },
+// Try it on: example searches whose results can be tried on.
+const TRY_ON_EXAMPLES = [
+  { query: "Cotton kurti for women", icon: "shirt", label: "Clothes", text: "A kurti, shirt or dress on your photo (AI, about 30 s)" },
+  { query: "Aviator sunglasses for men", icon: "sparkles", label: "Sunglasses", text: "The real frames placed on your face photo" },
+  { query: "Analog watch for men", icon: "clock", label: "Watches", text: "The real watch placed on your wrist photo" },
 ];
-
-// Stores that regularly appear in SnapBuy results, shown as plain text.
-const STORES = ["Amazon.in", "Flipkart", "Myntra", "AJIO", "Meesho", "Tata CLiQ", "IndiaMART"];
 
 // Search stages reported by the backend, in order (see UploadPanel).
 const STAGE = { uploading: 0, identifying: 1, ranking: 2, checking: 3 };
@@ -128,11 +120,12 @@ function clearPending(results) {
 
 export default function App() {
   const resultsRef = useRef(null);
-  const panelRef = useRef(null);
-  const [highlightPanel, setHighlightPanel] = useState(false);
 
   const [view, setView] = useState("discover");
-  const [mode, setMode] = useState("photo");
+  // The tool page open (null = home with the search box and every tool),
+  // and what the photo is for on the photo page.
+  const [tool, setTool] = useState(null);
+  const [purpose, setPurpose] = useState("product");
   const [tryOnProduct, setTryOnProduct] = useState(null);
   const [textQuery, setTextQuery] = useState("");
   const [file, setFile] = useState(null);
@@ -342,7 +335,10 @@ export default function App() {
     }
 
     setError("");
-    setMode("photo");
+    if (tool !== "photo") {
+      setTool("photo");
+      setPurpose("product");
+    }
     setOriginalFile(nextFile);
     setOriginalUrl(URL.createObjectURL(nextFile));
     showImage(nextFile);
@@ -381,7 +377,7 @@ export default function App() {
     scrolledRef.current = false;
 
     if (entry.kind === "text") {
-      setMode("text");
+      setTool(null);
       setTextQuery(entry.query);
       setResults({ ...entry.results, kind: "text", restoredAt: entry.savedAt });
       return;
@@ -389,7 +385,8 @@ export default function App() {
 
     const restored = dataUrlToFile(entry.image, entry.fileName);
 
-    setMode("photo");
+    setTool("photo");
+    setPurpose("product");
     setOriginalFile(restored);
     setOriginalUrl(URL.createObjectURL(restored));
     setFile(restored);
@@ -410,10 +407,6 @@ export default function App() {
     );
   }
 
-  function changeMode(nextMode) {
-    setMode(nextMode);
-    setError("");
-  }
 
   function rememberSearch(searchedFile, finalResults) {
     const entry = {
@@ -471,35 +464,49 @@ export default function App() {
     );
   }
 
-  // Bring the search panel into view from the call-to-action at the bottom.
-  // Open the search panel, optionally in a mode: "photo", "text",
-  // "outfit" (photo, pointing at Find the outfit) or "tryon" (an example
-  // search whose clothes can be tried on).
-  function goToSearch(nextMode) {
-    if (nextMode === "tryon") {
-      searchText("Cotton kurti for women");
+  // Open a tool from the home page's grid (or a link): photo tools share
+  // one page with their purpose set; Price watch is on Saved; Colours is a
+  // dialog.
+  function openTool(key) {
+    setError("");
+    if (key === "watch") {
+      setView("saved");
+    } else if (key === "colours") {
+      setShowColours(true);
       return;
+    } else {
+      setView("discover");
+      if (PHOTO_TOOLS[key]) {
+        setTool("photo");
+        setPurpose(PHOTO_TOOLS[key]);
+      } else {
+        setTool(key);
+      }
+      setResults(null);
+      setOutfit(null);
+      setReturnTo(null);
     }
-    if (nextMode === "plan" || nextMode === "text" || nextMode === "gift") {
-      changeMode(nextMode);
-    } else if (nextMode === "photo" || nextMode === "outfit" || nextMode === "room") {
-      changeMode("photo");
-    }
-    // Wait a frame so a newly shown panel can take focus.
-    requestAnimationFrame(() => {
-      panelRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-      const target =
-        (nextMode === "outfit" || nextMode === "room") && file
-          ? `.${nextMode === "room" ? "room" : "outfit"}-button`
-          : nextMode === "plan"
-            ? "#plan-request"
-            : nextMode === "gift"
-              ? "#gift-about"
-            : ".dropzone, .text-search-field input, .search-button";
-      panelRef.current?.querySelector(target)?.focus({ preventScroll: true });
-    });
-    setHighlightPanel(true);
-    setTimeout(() => setHighlightPanel(false), 1600);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  // Back to the home page: the search box and every tool.
+  function goHome() {
+    setView("discover");
+    setTool(null);
+    setResults(null);
+    setOutfit(null);
+    setReturnTo(null);
+    setError("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  // The photo page's main button, for the chosen purpose.
+  function runPhoto(chosen) {
+    if (chosen === "outfit") findOutfit();
+    else if (chosen === "rate") rateOutfit();
+    else if (chosen === "room") shopRoom();
+    else if (chosen === "list") shopList();
+    else search();
   }
 
   // refineQuery: optional words to narrow the search (from "Refine").
@@ -727,7 +734,8 @@ export default function App() {
     }
     const returnPoint = { outfit };
     showImage(itemFile);
-    setMode("photo");
+    setTool("photo");
+    setPurpose("product");
     await search(undefined, itemFile, returnPoint);
   }
 
@@ -823,7 +831,8 @@ export default function App() {
       return;
     }
 
-    setMode("text");
+    setTool(null);
+    setView("discover");
     setTextQuery(query);
     setError("");
     setResults(null);
@@ -867,10 +876,6 @@ export default function App() {
     }
   }
 
-  const modeTabs = (
-    <SearchModeTabs mode={mode} onChange={changeMode} disabled={isSearching} />
-  );
-
   return (
     <PaletteContext.Provider value={paletteValue}>
     <CompareContext.Provider value={compareValue}>
@@ -878,7 +883,7 @@ export default function App() {
     <div className="app">
       <header className="site-header">
         <div className="container header-inner">
-          <button type="button" className="brand" onClick={() => setView("discover")} aria-label="SnapBuy AI home">
+          <button type="button" className="brand" onClick={goHome} aria-label="SnapBuy AI home">
             <Logo />
           </button>
 
@@ -887,10 +892,11 @@ export default function App() {
               type="button"
               className={`nav-item ${view === "discover" ? "is-active" : ""}`}
               aria-current={view === "discover" ? "page" : undefined}
-              onClick={() => setView("discover")}
+              onClick={goHome}
+              aria-label="Home"
             >
               <Icon name="search" size={16} />
-              Discover
+              <span className="nav-label">Home</span>
             </button>
             <button
               type="button"
@@ -914,10 +920,13 @@ export default function App() {
               className={`nav-item ${view === "saved" ? "is-active" : ""}`}
               aria-current={view === "saved" ? "page" : undefined}
               onClick={() => setView("saved")}
+              aria-label="Saved and watched"
             >
               <Icon name="heart" size={16} />
-              Saved
-              {saved.length > 0 && <span className="nav-count">{saved.length}</span>}
+              <span className="nav-label">Saved</span>
+              {saved.length + watches.length > 0 && (
+                <span className="nav-count">{saved.length + watches.length}</span>
+              )}
             </button>
           </nav>
         </div>
@@ -957,121 +966,113 @@ export default function App() {
         )}
         {view === "discover" ? (
           <>
-            <section className="hero">
-              <div className="container hero-inner">
-                <div className="hero-copy">
+            {tool ? (
+              <section className="tool-page">
+                <div className="container tool-page-inner">
+                  <button type="button" className="link-button tool-back" onClick={goHome}>
+                    <Icon name="undo" size={14} />
+                    All tools
+                  </button>
+                  <header className="tool-page-header">
+                    <span className="tool-card-icon" aria-hidden="true">
+                      <Icon name={TOOLS[tool === "photo" ? PURPOSE_TOOLS[purpose] : tool].icon} size={22} />
+                    </span>
+                    <div>
+                      <h1>{TOOLS[tool === "photo" ? PURPOSE_TOOLS[purpose] : tool].title}</h1>
+                      <p>{TOOLS[tool === "photo" ? PURPOSE_TOOLS[purpose] : tool].text}</p>
+                    </div>
+                  </header>
+
+                  {tool === "photo" ? (
+                    <UploadPanel
+                      file={file}
+                      previewUrl={previewUrl}
+                      isSearching={isSearching}
+                      isComplete={isComplete}
+                      elapsed={elapsed}
+                      stage={stage}
+                      stageElapsed={stageElapsed}
+                      identifiedQuery={identifiedQuery}
+                      error={error}
+                      onSelect={selectImage}
+                      onRemove={removeImage}
+                      isCropped={Boolean(file && originalFile && file !== originalFile)}
+                      onCrop={() => setIsCropping(true)}
+                      onUndoCrop={undoCrop}
+                      purpose={purpose}
+                      onPurposeChange={(next) => {
+                        setPurpose(next);
+                        setError("");
+                      }}
+                      onRun={runPhoto}
+                      isBusy={isFindingOutfit}
+                      onTypedList={(text) => shopList({ text })}
+                    />
+                  ) : tool === "gift" ? (
+                    <GiftPanel
+                      onFind={findGifts}
+                      isFinding={isFindingOutfit && outfit?.kind === "gift"}
+                      error={error}
+                    />
+                  ) : tool === "plan" ? (
+                    <PlanPanel
+                      onPlan={planLook}
+                      isPlanning={isFindingOutfit && outfit?.kind === "plan"}
+                      error={error}
+                    />
+                  ) : (
+                    <div className="panel search-panel tryon-tool">
+                      <p className="tryon-tool-lead">
+                        Search for something to wear, then tap <strong>Try on</strong> on its card.
+                        Pick a kind to start:
+                      </p>
+                      <ul className="tryon-tool-options">
+                        {TRY_ON_EXAMPLES.map((example) => (
+                          <li key={example.query}>
+                            <button type="button" className="tool-card" onClick={() => searchText(example.query)}>
+                              <span className="tool-card-icon" aria-hidden="true">
+                                <Icon name={example.icon} size={20} />
+                              </span>
+                              <span className="tool-card-text">
+                                <strong>{example.label}</strong>
+                                <small>{example.text}</small>
+                              </span>
+                              <Icon name="arrowRight" size={16} className="tool-card-arrow" />
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </section>
+            ) : (
+              <section className="home-hero">
+                <div className="container home-hero-inner">
                   <span className="pill pill-outline">
                     <span className="pill-dot" />
-                    AI shopping assistant for India
+                    Your AI shopping assistant for India
                   </span>
-
-                  <HeroHeadline />
-
+                  <h1>
+                    Shop smarter with <span className="hero-accent">AI</span>
+                  </h1>
                   <p className="hero-lead">
-                    Upload a picture, describe it in your own words, or shop a
-                    whole outfit. SnapBuy finds it across online stores, shows
-                    where it's cheapest, and lets you try it on.
+                    Search by photo, words or voice and see where it's cheapest. Plan outfits on
+                    a budget, find gifts, and get told when prices drop.
                   </p>
-
-                  <div className="ways" role="group" aria-label="Ways to shop">
-                    {WAYS.map((way, index) => (
-                      <button
-                        key={way.mode}
-                        type="button"
-                        className="way-chip"
-                        style={{ "--i": index }}
-                        onClick={() => goToSearch(way.mode)}
-                      >
-                        <span className="way-icon">
-                          <Icon name={way.icon} size={15} />
-                        </span>
-                        {way.label}
-                        {way.isNew && <span className="new-pill">New</span>}
-                      </button>
-                    ))}
-                  </div>
-
-                  <ul className="feature-list hero-highlights">
-                    {HIGHLIGHTS.map((feature) => (
-                      <li key={feature.text}>
-                        <span className="feature-icon">
-                          <Icon name={feature.icon} size={14} />
-                        </span>
-                        {feature.text}
-                      </li>
-                    ))}
-                  </ul>
-
-                  <div className="store-strip">
-                    <span>Finds listings from stores like</span>
-                    <ul>
-                      {STORES.map((store) => (
-                        <li key={store}>{store}</li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-
-                <div
-                  ref={panelRef}
-                  className={`hero-visual ${highlightPanel ? "is-highlighted" : ""}`}
-                >
-                {mode === "photo" ? (
-                  <UploadPanel
-                    modeTabs={modeTabs}
-                    file={file}
-                    previewUrl={previewUrl}
-                    isSearching={isSearching}
-                    isComplete={isComplete}
-                    elapsed={elapsed}
-                    stage={stage}
-                    stageElapsed={stageElapsed}
-                    identifiedQuery={identifiedQuery}
-                    error={error}
-                    onSelect={selectImage}
-                    onRemove={removeImage}
-                    isCropped={Boolean(file && originalFile && file !== originalFile)}
-                    onCrop={() => setIsCropping(true)}
-                    onUndoCrop={undoCrop}
-                    onSearch={search}
-                    onFindOutfit={findOutfit}
-                    onRateOutfit={rateOutfit}
-                    onShopRoom={shopRoom}
-                    onShopList={() => shopList()}
-                    isFindingOutfit={isFindingOutfit}
-                    busyKind={isFindingOutfit ? outfit?.kind : null}
-                  />
-                ) : mode === "gift" ? (
-                  <GiftPanel
-                    modeTabs={modeTabs}
-                    onFind={findGifts}
-                    isFinding={isFindingOutfit && outfit?.kind === "gift"}
-                    error={error}
-                  />
-                ) : mode === "plan" ? (
-                  <PlanPanel
-                    modeTabs={modeTabs}
-                    onPlan={planLook}
-                    isPlanning={isFindingOutfit && outfit?.kind === "plan"}
-                    error={error}
-                  />
-                ) : (
-                  <TextSearchPanel
-                    modeTabs={modeTabs}
+                  <HomeSearch
                     query={textQuery}
                     onQueryChange={setTextQuery}
                     onSearch={searchText}
+                    onPhoto={selectImage}
                     isSearching={isSearching}
                     error={error}
-                    onShopList={shopList}
-                    isShoppingList={isFindingOutfit && outfit?.kind === "list"}
                   />
-                )}
-                <SearchQuota refreshKey={isSearching} />
                 </div>
-              </div>
+              </section>
+            )}
 
-            </section>
+            {!tool && !results && !outfit && !isSearching && <ToolGrid onOpen={openTool} />}
 
             <div ref={resultsRef} className="results-anchor" />
 
@@ -1143,7 +1144,7 @@ export default function App() {
               />
             )}
 
-            {!results && !isSearching && <Landing onStart={goToSearch} onExample={searchText} />}
+            {!tool && !results && !outfit && !isSearching && <Landing />}
           </>
         ) : (
           <section className="saved container">
@@ -1183,7 +1184,7 @@ export default function App() {
                 </span>
                 <h3>Nothing saved yet</h3>
                 <p>Tap the heart on any product to keep it here.</p>
-                <button type="button" className="button button-primary" onClick={() => setView("discover")}>
+                <button type="button" className="button button-primary" onClick={goHome}>
                   Start a search
                   <Icon name="arrowRight" size={16} />
                 </button>
@@ -1227,6 +1228,9 @@ export default function App() {
         ))}
 
       <footer className="site-footer">
+        <div className="container footer-quota">
+          <SearchQuota refreshKey={isSearching} />
+        </div>
         <div className="container footer-inner">
           <Logo />
           <p>

@@ -33,6 +33,8 @@ What a shopper can do:
 
 No sign-up is needed. Saved items, recent searches, try-on photos and the colour palette stay in the user's browser.
 
+**How the app is laid out.** The home page has one search box (type, speak, or tap the camera for a photo) and below it a "What would you like to do?" grid of every tool, grouped as Find & save, Style me, and Plan & gift. Each tool opens its own page with only its inputs and an "All tools" link back. All photo tools share one page that asks "What should we do with the photo?" (find this product, find the outfit, rate my outfit, shop this room, shop my list), with one action button. Results appear under the search box or the tool.
+
 ## How it works
 
 The React app in the browser sends every request to the FastAPI backend, which calls the search providers, store pages and AI models and streams results back. Keys and heavy work stay on the server; MediaPipe and saved data stay in the browser.
@@ -110,25 +112,27 @@ SnapBuyAI/
         ├── App.jsx                The app shell: state, search flows, which view is shown
         ├── App.css, index.css     All styles, light and dark themes
         ├── components/
-        │   ├── UploadPanel.jsx         Photo upload, crop, Find the outfit, Rate my outfit buttons
-        │   ├── TextSearchPanel.jsx     Typed and voice search, English/Hindi toggle
+        │   ├── HomeSearch.jsx          The home search box: type, voice (English/Hindi), camera
+        │   ├── ToolGrid.jsx            "What would you like to do?" grid of every tool
+        │   ├── UploadPanel.jsx         Photo page: upload, crop, what to do with the photo, one action
         │   ├── ResultsView.jsx         Results page: sections, filters, deals, dupes
         │   ├── ProductCard.jsx         One listing: price, deal line, badges, Try on, Complete the look
         │   ├── OutfitView.jsx          Outfit, look and rating screens
         │   ├── AssistantChat.jsx       "Ask AI about these" chat panel
-        │   ├── PlanPanel.jsx           Budget look planner form (the "Plan" tab)
-        │   ├── GiftPanel.jsx           Gift finder form (the "Gift" tab)
+        │   ├── PlanPanel.jsx           Budget look planner form
+        │   ├── GiftPanel.jsx           Gift finder form
         │   ├── PriceWatch.jsx          Price watch list on the Saved page
         │   ├── CompareDialog.jsx       Compare bar and side-by-side dialog
         │   ├── ColoursDialog.jsx       Colours that suit you
         │   ├── TryOnDialog.jsx         Clothes try-on (before/after)
         │   ├── AccessoryTryOnDialog.jsx Glasses and watch try-on on a photo
         │   ├── CropDialog.jsx          Crop a photo before searching
-        │   ├── Landing.jsx, Showcase.jsx, HeroHeadline.jsx  Home page sections
+        │   ├── Landing.jsx             Home page: how it works and the FAQ
         │   ├── SearchQuota.jsx         Searches left this month
         │   ├── RecentSearches.jsx      Recent searches strip
         │   └── Icon.jsx                Inline SVG icon set and logo
         └── lib/
+            ├── tools.js                The list of tools shown on the home page
             ├── searchStream.js         Calls the streaming endpoints and reads NDJSON events
             ├── products.js             API URL, price formatting, filters, match levels
             ├── deals.js                Deal score and fake-discount detection
@@ -197,7 +201,7 @@ On any product card: a Groq model suggests 3–4 items that go with it at the sa
 
 ### Plan on a budget
 
-The "Plan" tab takes an occasion, who it's for and a total budget (or a budget in the sentence, such as "2k tak").
+The "Plan a look on a budget" page takes an occasion, who it's for and a total budget (or a budget in the sentence, such as "2k tak").
 
 1. A Groq model plans 3–5 wearable pieces and splits the budget between them.
 2. Each piece is searched; the listing judge keeps the right items within that piece's share.
@@ -206,11 +210,11 @@ The "Plan" tab takes an occasion, who it's for and a total budget (or a budget i
 
 ### Find a gift
 
-The "Gift" tab: chips for who it's for and the occasion, what they like and a budget (Hindi and Hinglish work). A Groq model suggests six varied ideas with a reason each; each is searched, checked by the listing judge, and listings well over the budget are dropped. Code: `gift_service.py`, `GiftPanel.jsx`.
+The "Find a gift" page: chips for who it's for and the occasion, what they like and a budget (Hindi and Hinglish work). A Groq model suggests six varied ideas with a reason each; each is searched, checked by the listing judge, and listings well over the budget are dropped. Code: `gift_service.py`, `GiftPanel.jsx`.
 
 ### Shop my list
 
-A photo of a handwritten list or chat screenshot ("Shop my list" under Photo), or a typed list ("Have a whole list?" under Text). AI reads each line into an English search with quantity and any written budget; each is searched and checked; the best listing at about the typical price is picked per line and the cart total counts quantities. Code: `list_service.py`.
+A photo of a handwritten list or chat screenshot (the "Shop my list" tool, or "Shop my list" as the photo's purpose), or a typed list ("Type your list instead" on the same page). AI reads each line into an English search with quantity and any written budget; each is searched and checked; the best listing at about the typical price is picked per line and the cart total counts quantities. Code: `list_service.py`.
 
 ### Price watch
 

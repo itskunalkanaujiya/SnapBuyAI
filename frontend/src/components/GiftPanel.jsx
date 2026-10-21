@@ -14,7 +14,7 @@ const EXAMPLES = [
  * Gift finder: who it's for, what they like, the occasion and a budget, in
  * any words (Hindi and Hinglish too). AI suggests six ideas with listings.
  */
-export default function GiftPanel({ modeTabs, onFind, isFinding, error }) {
+export default function GiftPanel({ onFind, isFinding, error }) {
   const [person, setPerson] = useState("");
   const [occasion, setOccasion] = useState("");
   const [about, setAbout] = useState("");
@@ -42,15 +42,6 @@ export default function GiftPanel({ modeTabs, onFind, isFinding, error }) {
 
   return (
     <div className="panel search-panel plan-panel">
-      {modeTabs}
-
-      <div className="panel-header">
-        <div>
-          <h2>Find the perfect gift</h2>
-          <p>Tell us who it's for and what they like; AI suggests six ideas you can buy now.</p>
-        </div>
-      </div>
-
       <form
         onSubmit={(event) => {
           event.preventDefault();
