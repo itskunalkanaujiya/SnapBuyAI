@@ -37,10 +37,11 @@ from image_shopping_service import compute_visual_similarity_scores, download_th
 from text_shopping_service import search_products_by_text
 
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
-# Tried in order; a model Google has retired (404) is skipped.
+# Tried in order; a model Google has retired (404) or that is overloaded
+# (503) is skipped. Low thinking keeps answers to a few seconds.
 GEMINI_MODELS = [
     model
-    for model in (os.getenv("GEMINI_MODEL"), "gemini-2.5-flash", "gemini-2.0-flash")
+    for model in (os.getenv("GEMINI_MODEL"), "gemini-3.5-flash", "gemini-3.5-flash-lite")
     if model
 ]
 VISION_MODEL = os.getenv("GROQ_VISION_MODEL", "qwen/qwen3.8-27b")
@@ -208,31 +209,34 @@ def _clean(text, limit):
 def ask_vision_model(url, api_key, models, prompt, photo_url):
     """The first available model's JSON answer about the photo. Raises OutfitError."""
     for model in models:
+        payload = {
+            "model": model,
+            "temperature": 0,
+            "max_tokens": 1400,
+            "response_format": {"type": "json_object"},
+            "messages": [{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": photo_url}},
+                ],
+            }],
+        }
+        if url == GEMINI_URL:
+            payload["reasoning_effort"] = "low"
         try:
             response = requests.post(
                 url,
                 headers={"Authorization": f"Bearer {api_key}"},
-                json={
-                    "model": model,
-                    "temperature": 0,
-                    "max_tokens": 1400,
-                    "response_format": {"type": "json_object"},
-                    "messages": [{
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": prompt},
-                            {"type": "image_url", "image_url": {"url": photo_url}},
-                        ],
-                    }],
-                },
+                json=payload,
                 timeout=VISION_TIMEOUT_SECONDS,
             )
         except requests.RequestException as exc:
             print(f"Outfit model request failed ({model}): {exc}")
             raise OutfitError("Couldn't reach the outfit AI. Please try again.")
 
-        if response.status_code == 404:
-            print(f"Vision model {model} is not available; trying the next one.")
+        if response.status_code in (404, 503):
+            print(f"Vision model {model} is not available ({response.status_code}); trying the next one.")
             continue
         if response.status_code == 429:
             raise OutfitError("The outfit AI is busy right now. Please try again in a minute.")

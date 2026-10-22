@@ -34,7 +34,7 @@ def reset_server_state():
 def no_serper(monkeypatch):
     """Tests never call Serper, SearchApi or Vercel Blob; tests that need
     them set fake keys."""
-    for name in ("SERPER_API_KEY", "SEARCHAPI_API_KEY", "BLOB_READ_WRITE_TOKEN", "GROQ_API_KEY"):
+    for name in ("SERPER_API_KEY", "SEARCHAPI_API_KEY", "BLOB_READ_WRITE_TOKEN", "GROQ_API_KEY", "GEMINI_API_KEY"):
         monkeypatch.delenv(name, raising=False)
 
 
