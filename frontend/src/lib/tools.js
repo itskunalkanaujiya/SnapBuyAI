@@ -1,4 +1,4 @@
-// Everything SnapBuy can do. Photo tools share one page (the photo is used
+// Everything Vistora can do. Photo tools share one page (the photo is used
 // for the chosen purpose). Each tool has its own colour (tone) and a 3D emoji
 // picture (art, in /emoji) for its tile; `featured` tools get the big tiles on the home page.
 export const TOOL_LIST = [

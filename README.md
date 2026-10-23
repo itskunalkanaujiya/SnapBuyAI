@@ -1,6 +1,6 @@
-# SnapBuy AI
+# Vistora
 
-Upload a photo of a product — or type what you're looking for — and SnapBuy
+Upload a photo of a product — or type what you're looking for — and Vistora
 AI finds matching listings across online stores in India, with prices and
 stock availability.
 
@@ -171,7 +171,7 @@ Google Shopping's page comparing the stores that sell the item.
 **Photo search:**
 
 1. The photo is sent to **Google Lens** (through [SerpApi](https://serpapi.com/google-lens-api)).
-   No search text is needed — Lens identifies the product, and SnapBuy builds
+   No search text is needed — Lens identifies the product, and Vistora builds
    a short product query from the titles of the matching listings.
 2. Non-shopping and non-product pages are filtered out, and duplicates removed.
 3. **CLIP** (the ViT-B/32 image encoder, from
@@ -275,7 +275,7 @@ host.
 ## Notes
 
 - Each search uses one SerpApi search (two if Google Lens returns nothing and
-  SnapBuy retries). Identical photos are served from a one-hour cache.
+  Vistora retries). Identical photos are served from a one-hour cache.
 - To protect your SerpApi quota, each client (IP address) can run 10 uncached
   searches per 10 minutes; further searches get HTTP 429 with a `Retry-After`
   header. Change this with `SEARCH_LIMIT` and `SEARCH_WINDOW_SECONDS` in

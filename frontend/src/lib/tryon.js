@@ -2,7 +2,7 @@ import { API_URL } from "./products.js";
 
 // The person photo is kept in this browser so it can be reused for every
 // try-on, and can be forgotten at any time.
-const PERSON_KEY = "snapbuy-ai-tryon-photo";
+const PERSON_KEY = "vistora-tryon-photo";
 const PERSON_MAX_SIZE = 1024;
 
 export function canTryOn(product) {

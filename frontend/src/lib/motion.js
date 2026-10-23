@@ -73,7 +73,7 @@ export function useTypewriter(phrases, active = true) {
   return active ? text : "";
 }
 
-const THEME_KEY = "snapbuy-ai-theme";
+const THEME_KEY = "vistora-theme";
 
 /** The colour theme ("dark" by default), applied to <html> and remembered. */
 export function useTheme() {

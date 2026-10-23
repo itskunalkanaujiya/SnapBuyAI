@@ -48,7 +48,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="SnapBuy AI",
+    title="Vistora",
     version="0.4.0",
     lifespan=lifespan,
 )
@@ -228,7 +228,7 @@ def lens_ready_image(image: Image.Image):
 @app.get("/")
 def home():
     return {
-        "app": "SnapBuy AI",
+        "app": "Vistora",
         "message": "Backend is working!",
     }
 

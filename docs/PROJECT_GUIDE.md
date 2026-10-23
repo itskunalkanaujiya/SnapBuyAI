@@ -1,11 +1,11 @@
-# SnapBuy AI — Project Guide
+# Vistora — Project Guide
 
 Oct 22, 2026 · Live version of this guide: [Claude Docs](https://claude.ai/code/artifact/dd30c605-4259-430e-ad88-27b811220527)
 
-SnapBuy AI is a free website that helps people in India shop smarter. You show it a photo or type what you want, and it finds that product in online stores and tells you where it is cheapest.
+Vistora is a free website that helps people in India shop smarter. You show it a photo or type what you want, and it finds that product in online stores and tells you where it is cheapest.
 
 - **Try it:** [snapbuy-ai.vercel.app](https://snapbuy-ai.vercel.app)
-- **Code:** [github.com/itskunalkanaujiya/SnapBuyAI](https://github.com/itskunalkanaujiya/SnapBuyAI)
+- **Code:** [github.com/itskunalkanaujiya/Vistora](https://github.com/itskunalkanaujiya/Vistora)
 
 No sign-up is needed. Anything you save (wishlist, recent searches, your colours, watched prices) stays in your own browser.
 
@@ -43,7 +43,7 @@ Every tool follows the same four steps.
 3. **We search the stores.** The website searches Google Shopping and Google Lens, which cover Amazon, Flipkart, Myntra, AJIO, Meesho and many more.
 4. **We sort and show the results.** Another AI compares each product's picture with yours and keeps the closest ones. Prices are checked, and the results appear on screen one by one, as soon as each is ready.
 
-![How SnapBuy AI works: the browser, the server, and the outside services it uses](architecture.png)
+![How Vistora works: the browser, the server, and the outside services it uses](architecture.png)
 
 The project has two parts that talk to each other:
 
@@ -119,7 +119,7 @@ The glasses and watch cut-out (removing the product photo's background) is custo
 The code has two main folders, one for each part.
 
 ```
-SnapBuyAI/
+Vistora/
 ├── backend/        The server (Python)
 │   ├── main.py                  The front door: every request arrives here
 │   ├── image_shopping_service.py  Search by photo
@@ -232,7 +232,7 @@ The secret keys are stored on Vercel as encrypted settings, not in the code.
 
 | What you see | Why | What to do |
 | --- | --- | --- |
-| "Can't reach the SnapBuy server" | The server isn't running | Start it (Terminal 1 above) |
+| "Can't reach the Vistora server" | The server isn't running | Start it (Terminal 1 above) |
 | "The AI is busy right now" | The free AI limit for this minute is used up | Wait a minute and try again |
 | "Try-on is busy" | The free try-on quota for today is used up | Try again tomorrow |
 | "Limit reached" | Each visitor gets 10 searches every 10 minutes | Wait a few minutes |
@@ -247,7 +247,7 @@ The secret keys are stored on Vercel as encrypted settings, not in the code.
 | Google Lens | Google's "search with a picture" |
 | Google Shopping | Google's list of products and prices from many stores |
 | CLIP | An AI that scores how similar two pictures look |
-| Gemini, Groq | Services that run AI models; SnapBuy uses their free plans |
+| Gemini, Groq | Services that run AI models; Vistora uses their free plans |
 | Listing judge | A second AI that double-checks search results are the right item |
 | API | The way the website and the server talk to each other |
 | API key | A secret password that lets the server use an outside service |

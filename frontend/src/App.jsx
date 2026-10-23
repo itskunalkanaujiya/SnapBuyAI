@@ -65,7 +65,7 @@ import {
   getProductId,
 } from "./lib/products.js";
 
-const SAVED_KEY = "snapbuy-ai-wishlist";
+const SAVED_KEY = "vistora-wishlist";
 const PROGRESS_FINISH_MS = 650;
 
 function readSaved() {
@@ -291,7 +291,7 @@ export default function App() {
         notifyDrops(found);
       }
     } catch (checkError) {
-      if (all) setWatchError(checkError instanceof TypeError ? "Can't reach the SnapBuy server." : checkError.message);
+      if (all) setWatchError(checkError instanceof TypeError ? "Can't reach the Vistora server." : checkError.message);
     } finally {
       setIsCheckingPrices(false);
     }
@@ -608,7 +608,7 @@ export default function App() {
       setResults(clearPending);
       setError(
         searchError instanceof TypeError
-          ? "Can't reach the SnapBuy server. Check that the backend is running."
+          ? "Can't reach the Vistora server. Check that the backend is running."
           : searchError.message
       );
     } finally {
@@ -833,7 +833,7 @@ export default function App() {
       );
       setError(
         outfitError instanceof TypeError
-          ? "Can't reach the SnapBuy server. Check that the backend is running."
+          ? "Can't reach the Vistora server. Check that the backend is running."
           : outfitError.message
       );
     } finally {
@@ -887,7 +887,7 @@ export default function App() {
     } catch (searchError) {
       setError(
         searchError instanceof TypeError
-          ? "Can't reach the SnapBuy server. Check that the backend is running."
+          ? "Can't reach the Vistora server. Check that the backend is running."
           : searchError.message
       );
     } finally {
@@ -902,7 +902,7 @@ export default function App() {
     <div className="app">
       <header className="site-header">
         <div className="container header-inner">
-          <button type="button" className="brand" onClick={goHome} aria-label="SnapBuy AI home">
+          <button type="button" className="brand" onClick={goHome} aria-label="Vistora home">
             <Logo />
           </button>
 
@@ -1087,7 +1087,7 @@ export default function App() {
                     </span>
                   </h1>
                   <p className="hero-lead">
-                    Search with a photo, your words or your voice. SnapBuy checks every store and
+                    Search with a photo, your words or your voice. Vistora checks every store and
                     shows you where it's cheapest.
                   </p>
                   <HomeSearch
@@ -1285,7 +1285,7 @@ export default function App() {
             Prices and availability come from third-party stores and may change. Always confirm on
             the seller's site before buying.
           </p>
-          <span>© {new Date().getFullYear()} SnapBuy AI · Made in India</span>
+          <span>© {new Date().getFullYear()} Vistora · Made in India</span>
         </div>
       </footer>
       {/* Phones: app-style navigation at the bottom. */}

@@ -3,7 +3,7 @@ import { API_URL } from "./products.js";
 
 // "Colours that suit you": the palette from a selfie, kept only in this
 // browser. Listings whose names mention one of the colours get "Suits you".
-const STORAGE_KEY = "snapbuy-ai-palette";
+const STORAGE_KEY = "vistora-palette";
 
 // Shopping names for the same colour, so "maroon" also matches "burgundy".
 const SAME_COLOUR = [

@@ -52,7 +52,7 @@ export default function ColoursDialog({ palette, onSave, onClose }) {
     } catch (checkError) {
       setError(
         checkError instanceof TypeError
-          ? "Can't reach the SnapBuy server. Check that the backend is running."
+          ? "Can't reach the Vistora server. Check that the backend is running."
           : checkError.message
       );
     } finally {

@@ -47,7 +47,7 @@ export function frameScale(pupilScale, faceScale) {
 
 // The person's photo is kept in this browser per kind of product (a face
 // for glasses, a wrist for watches) so it can be reused.
-const PHOTO_KEYS = { glasses: "snapbuy-ai-tryon-face", watch: "snapbuy-ai-tryon-wrist" };
+const PHOTO_KEYS = { glasses: "vistora-tryon-face", watch: "vistora-tryon-wrist" };
 
 export function readAccessoryPhoto(category) {
   try {

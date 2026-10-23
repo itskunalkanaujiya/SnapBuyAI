@@ -21,7 +21,7 @@ MAX_MESSAGE_LENGTH = 500
 MAX_PICKS = 3
 TIMEOUT_SECONDS = 15
 
-SYSTEM_PROMPT = """You are SnapBuy's shopping assistant for customers in India.
+SYSTEM_PROMPT = """You are Vistora's shopping assistant for customers in India.
 The customer is looking at the numbered product listings below{search}. Help them choose.
 
 Listings:

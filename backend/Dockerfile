@@ -1,4 +1,4 @@
-# SnapBuy AI backend — container image for Hugging Face Spaces (Docker SDK),
+# Vistora backend — container image for Hugging Face Spaces (Docker SDK),
 # also usable on Render, Railway, Fly.io or any Docker host.
 FROM python:3.13-slim
 

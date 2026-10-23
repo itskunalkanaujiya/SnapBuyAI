@@ -249,7 +249,7 @@ export function Logo() {
         <Icon name="scan" size={18} />
       </span>
       <span className="logo-word">
-        SnapBuy<span className="logo-tag">AI</span>
+        Vistora
       </span>
     </span>
   );

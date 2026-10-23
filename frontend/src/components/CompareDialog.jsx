@@ -63,7 +63,7 @@ export default function CompareDialog({ products, query, onClose }) {
         active &&
         setError(
           compareError instanceof TypeError
-            ? "Can't reach the SnapBuy server. Check that the backend is running."
+            ? "Can't reach the Vistora server. Check that the backend is running."
             : compareError.message
         )
     );

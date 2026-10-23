@@ -83,7 +83,7 @@ export default function PriceWatch({ watches, onCheck, isChecking, onRemove, err
           </h3>
           <p>
             {watches.length} product{watches.length === 1 ? "" : "s"} watched · checked {timeAgo(lastChecked)} ·
-            re-checked automatically every 12 hours when you open SnapBuy
+            re-checked automatically every 12 hours when you open Vistora
           </p>
         </div>
         <button type="button" className="button button-secondary button-sm" onClick={onCheck} disabled={isChecking}>

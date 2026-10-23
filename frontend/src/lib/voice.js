@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 // Voice search with the browser's built-in speech recognition (Chrome, Edge,
 // Safari, Android). Free and on-device or browser-provided; nothing is sent
-// to SnapBuy until the words are searched.
+// to Vistora until the words are searched.
 
 const Recognition =
   typeof window !== "undefined" ? window.SpeechRecognition || window.webkitSpeechRecognition : null;

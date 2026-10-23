@@ -98,7 +98,7 @@ export default function AssistantChat({ products, query, onSearch }) {
           error: true,
           content:
             error instanceof TypeError
-              ? "Can't reach the SnapBuy server. Check that the backend is running."
+              ? "Can't reach the Vistora server. Check that the backend is running."
               : error.message,
         },
       ]);

@@ -1,5 +1,5 @@
 // Recent searches, kept in this browser only (localStorage).
-const HISTORY_KEY = "snapbuy-ai-recent-searches";
+const HISTORY_KEY = "vistora-recent-searches";
 const MAX_ENTRIES = 6;
 const THUMBNAIL_SIZE = 640;
 

@@ -44,9 +44,9 @@ function useReveal() {
 
 const FAQS = [
   {
-    question: "How does SnapBuy find products?",
+    question: "How does Vistora find products?",
     answer:
-      "Your photo is sent to Google Lens, which finds visually similar listings across the web. SnapBuy keeps the shopping results, ranks them with an AI image model by how closely they match your photo, and reads each listing's price and stock.",
+      "Your photo is sent to Google Lens, which finds visually similar listings across the web. Vistora keeps the shopping results, ranks them with an AI image model by how closely they match your photo, and reads each listing's price and stock.",
   },
   {
     question: "Can I search in Hindi or by voice?",
@@ -56,7 +56,7 @@ const FAQS = [
   {
     question: "What happens to my photo?",
     answer:
-      "It's sent to Google Lens only to run your search (for \"Find the outfit\", to an AI model on Groq that lists the items instead). To do that, it may sit for a few seconds at a private, unguessable temporary link, which is deleted as soon as the search starts; the SnapBuy server doesn't keep a copy. Your recent searches (with a small copy of each photo) and saved items stay in this browser only, and you can clear them at any time.",
+      "It's sent to Google Lens only to run your search (for \"Find the outfit\", to an AI model on Groq that lists the items instead). To do that, it may sit for a few seconds at a private, unguessable temporary link, which is deleted as soon as the search starts; the Vistora server doesn't keep a copy. Your recent searches (with a small copy of each photo) and saved items stay in this browser only, and you can clear them at any time.",
   },
   {
     question: "Which stores does it search?",
@@ -71,7 +71,7 @@ const FAQS = [
   {
     question: "Can I search without a photo?",
     answer:
-      "Yes. Switch the search panel to Text and type what you're looking for: keywords like \"Casio G-Shock green watch\", or a full sentence like \"an HP laptop with 8GB RAM and 512GB storage under 50k\". SnapBuy understands the brand, specs and budget, searches Google Shopping across Indian stores, and ranks listings by how many of your requirements they meet.",
+      "Yes. Switch the search panel to Text and type what you're looking for: keywords like \"Casio G-Shock green watch\", or a full sentence like \"an HP laptop with 8GB RAM and 512GB storage under 50k\". Vistora understands the brand, specs and budget, searches Google Shopping across Indian stores, and ranks listings by how many of your requirements they meet.",
   },
   {
     question: "Can I see how clothes look on me?",
@@ -81,17 +81,17 @@ const FAQS = [
   {
     question: "Can I try on sunglasses and watches?",
     answer:
-      "Yes. Tap \"Try on\" on glasses, sunglasses or a watch and upload a photo of your face or wrist: SnapBuy places the product's real photo on your eyes or wrist, so you see the actual design. Adjust the size and position, compare before and after, and download the picture. It's made in your browser; your photo isn't uploaded.",
+      "Yes. Tap \"Try on\" on glasses, sunglasses or a watch and upload a photo of your face or wrist: Vistora places the product's real photo on your eyes or wrist, so you see the actual design. Adjust the size and position, compare before and after, and download the picture. It's made in your browser; your photo isn't uploaded.",
   },
   {
-    question: "Can SnapBuy find a whole outfit from one photo?",
+    question: "Can Vistora find a whole outfit from one photo?",
     answer:
-      "Yes. Upload a photo of someone and tap \"Find the outfit\". AI identifies each item they're wearing (top, trousers, shoes, watch, glasses, bag and more) and SnapBuy shows shopping options for every item separately, usually in a few seconds. Clothing in the results can be tried on too.",
+      "Yes. Upload a photo of someone and tap \"Find the outfit\". AI identifies each item they're wearing (top, trousers, shoes, watch, glasses, bag and more) and Vistora shows shopping options for every item separately, usually in a few seconds. Clothing in the results can be tried on too.",
   },
   {
     question: "What are “Cheaper lookalikes” and deal scores?",
     answer:
-      "After a photo search, SnapBuy shows dupes: listings that look very similar to the closest matches but cost much less, with how much you'd save. Every result also gets a deal score, like \"Great deal · 30% below typical\", comparing its price with the typical price of everything found.",
+      "After a photo search, Vistora shows dupes: listings that look very similar to the closest matches but cost much less, with how much you'd save. Every result also gets a deal score, like \"Great deal · 30% below typical\", comparing its price with the typical price of everything found.",
   },
   {
     question: "Why do some products say “Price on store”?",
@@ -131,7 +131,7 @@ function HowItWorks() {
   );
 }
 
-// Facts about SnapBuy, counted up when the band scrolls into view.
+// Facts about Vistora, counted up when the band scrolls into view.
 const STATS = [
   { value: 10, label: "AI shopping tools", tone: "violet" },
   { value: 40, label: "listings checked per search", tone: "pink" },
@@ -178,7 +178,7 @@ function CountUp({ value, prefix = "" }) {
 
 function StatsBand() {
   return (
-    <section className="container stats-band" aria-label="SnapBuy in numbers">
+    <section className="container stats-band" aria-label="Vistora in numbers">
       {STATS.map((stat) => (
         <div key={stat.label} className={`stat-item tone-${stat.tone}`}>
           <strong>
@@ -203,7 +203,7 @@ function Faq() {
       <div className="faq-intro reveal">
         <span className="tool-hub-kicker">Good to know</span>
         <h2 id="faq-title">Questions, answered</h2>
-        <p>How SnapBuy finds products, what happens to your photos, and more.</p>
+        <p>How Vistora finds products, what happens to your photos, and more.</p>
       </div>
 
       <div className="faq-list reveal">

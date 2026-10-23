@@ -4,7 +4,7 @@ import { API_URL, getNumericPrice, getProductId } from "./products.js";
 // Price watch: products the user is watching, kept in this browser. Prices
 // are re-checked when the app opens (at most every CHECK_EVERY_MS), and a
 // drop shows a banner and, with permission, a browser notification.
-const STORAGE_KEY = "snapbuy-ai-price-watch";
+const STORAGE_KEY = "vistora-price-watch";
 export const MAX_WATCHES = 20;
 export const CHECK_EVERY_MS = 12 * 60 * 60 * 1000;
 const MAX_HISTORY = 30;

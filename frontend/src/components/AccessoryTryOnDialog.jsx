@@ -280,7 +280,7 @@ export default function AccessoryTryOnDialog({ product, onClose }) {
           <div className="modal-actions">
             {status === "done" ? (
               <>
-                <a className="button button-secondary" href={resultUrl} download="snapbuy-try-on.jpg">
+                <a className="button button-secondary" href={resultUrl} download="vistora-try-on.jpg">
                   <Icon name="download" size={16} />
                   Download
                 </a>

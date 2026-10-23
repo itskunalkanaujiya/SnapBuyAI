@@ -1,12 +1,12 @@
-# SnapBuy AI — backend
+# Vistora — backend
 
-FastAPI service behind [SnapBuy AI](https://github.com/itskunalkanaujiya/SnapBuyAI):
+FastAPI service behind [Vistora](https://github.com/itskunalkanaujiya/Vistora):
 upload a product photo and get matching listings from online stores in India,
 ranked by visual similarity, with prices and stock.
 
 Deployed on Vercel as the `snapbuy-ai-api` project (root directory
 `backend`), at https://snapbuy-ai-api.vercel.app. See the
-[main README](https://github.com/itskunalkanaujiya/SnapBuyAI#readme) for the
+[main README](https://github.com/itskunalkanaujiya/Vistora#readme) for the
 full project, API and local setup.
 
 ## Deployment files

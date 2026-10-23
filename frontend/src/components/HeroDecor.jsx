@@ -36,7 +36,7 @@ export function HeroBackdrop() {
   );
 }
 
-/** The stores SnapBuy compares, scrolling past. */
+/** The stores Vistora compares, scrolling past. */
 export function StoreMarquee() {
   const row = STORES.map((store) => (
     <li key={store}>

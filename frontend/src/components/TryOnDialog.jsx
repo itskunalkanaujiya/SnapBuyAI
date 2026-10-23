@@ -110,7 +110,7 @@ export default function TryOnDialog({ product, onClose }) {
     } catch (tryOnError) {
       setError(
         tryOnError instanceof TypeError
-          ? "Can't reach the SnapBuy server. Check your connection and try again."
+          ? "Can't reach the Vistora server. Check your connection and try again."
           : tryOnError.message
       );
       setStatus("error");
@@ -241,7 +241,7 @@ export default function TryOnDialog({ product, onClose }) {
           <div className="modal-actions">
             {status === "done" ? (
               <>
-                <a className="button button-secondary" href={resultUrl} download="snapbuy-try-on.jpg">
+                <a className="button button-secondary" href={resultUrl} download="vistora-try-on.jpg">
                   <Icon name="download" size={16} />
                   Download
                 </a>
