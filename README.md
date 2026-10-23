@@ -246,7 +246,7 @@ push to `main` redeploys them.
 
 | Project | Root directory | Address | Settings |
 |---|---|---|---|
-| `vistora` (frontend) | `frontend` | https://snapbuy-ai.vercel.app | `VITE_API_URL=https://vistora-api.vercel.app` |
+| `vistora` (frontend) | `frontend` | https://vistora-app.vercel.app | `VITE_API_URL=https://vistora-api.vercel.app` |
 | `vistora-api` (backend) | `backend` | https://vistora-api.vercel.app | `SERPAPI_API_KEY` (encrypted), `TRUST_PROXY_HEADERS`, `ALLOWED_ORIGIN_REGEX`, `VERCEL_SUPPORT_LARGE_FUNCTIONS=1` |
 
 The backend bundle includes CPU-only PyTorch (about 1 GB), so it uses Vercel's

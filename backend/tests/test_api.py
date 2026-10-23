@@ -208,8 +208,8 @@ def test_forwarded_header_ignored_unless_trusted(client, monkeypatch):
 def test_cors_allows_configured_origins(monkeypatch):
     import importlib
 
-    monkeypatch.setenv("ALLOWED_ORIGINS", "https://snapbuy-ai.vercel.app/")
-    monkeypatch.setenv("ALLOWED_ORIGIN_REGEX", r"https://snapbuy-ai(-[a-z0-9-]+)?\.vercel\.app")
+    monkeypatch.setenv("ALLOWED_ORIGINS", "https://vistora-app.vercel.app/")
+    monkeypatch.setenv("ALLOWED_ORIGIN_REGEX", r"https://vistora(-[a-z0-9-]+)?\.vercel\.app")
     try:
         app = importlib.reload(main).app
         test_client = TestClient(app)
@@ -221,8 +221,8 @@ def test_cors_allows_configured_origins(monkeypatch):
             )
             return response.headers.get("access-control-allow-origin") == origin
 
-        assert allowed("https://snapbuy-ai.vercel.app")
-        assert allowed("https://snapbuy-ai-git-main-kunal.vercel.app")
+        assert allowed("https://vistora-app.vercel.app")
+        assert allowed("https://vistora-git-main-kunal.vercel.app")
         assert allowed("http://localhost:5173")
         assert not allowed("https://evil.example.com")
     finally:

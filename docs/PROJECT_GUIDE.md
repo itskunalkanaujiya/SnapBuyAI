@@ -4,7 +4,7 @@ Oct 22, 2026 · Live version of this guide: [Claude Docs](https://claude.ai/code
 
 Vistora is a free website that helps people in India shop smarter. You show it a photo or type what you want, and it finds that product in online stores and tells you where it is cheapest.
 
-- **Try it:** [snapbuy-ai.vercel.app](https://snapbuy-ai.vercel.app)
+- **Try it:** [vistora-app.vercel.app](https://vistora-app.vercel.app)
 - **Code:** [github.com/itskunalkanaujiya/Vistora](https://github.com/itskunalkanaujiya/Vistora)
 
 No sign-up is needed. Anything you save (wishlist, recent searches, your colours, watched prices) stays in your own browser.
@@ -223,7 +223,7 @@ The tests never use real services or spend any credits; fake versions of the AI 
 
 | Part | Address |
 | --- | --- |
-| Website | [snapbuy-ai.vercel.app](https://snapbuy-ai.vercel.app) |
+| Website | [vistora-app.vercel.app](https://vistora-app.vercel.app) |
 | Server | [vistora-api.vercel.app](https://vistora-api.vercel.app) |
 
 The secret keys are stored on Vercel as encrypted settings, not in the code.
