@@ -246,8 +246,8 @@ push to `main` redeploys them.
 
 | Project | Root directory | Address | Settings |
 |---|---|---|---|
-| `snapbuy-ai` (frontend) | `frontend` | https://snapbuy-ai.vercel.app | `VITE_API_URL=https://snapbuy-ai-api.vercel.app` |
-| `snapbuy-ai-api` (backend) | `backend` | https://snapbuy-ai-api.vercel.app | `SERPAPI_API_KEY` (encrypted), `TRUST_PROXY_HEADERS`, `ALLOWED_ORIGIN_REGEX`, `VERCEL_SUPPORT_LARGE_FUNCTIONS=1` |
+| `vistora` (frontend) | `frontend` | https://snapbuy-ai.vercel.app | `VITE_API_URL=https://vistora-api.vercel.app` |
+| `vistora-api` (backend) | `backend` | https://vistora-api.vercel.app | `SERPAPI_API_KEY` (encrypted), `TRUST_PROXY_HEADERS`, `ALLOWED_ORIGIN_REGEX`, `VERCEL_SUPPORT_LARGE_FUNCTIONS=1` |
 
 The backend bundle includes CPU-only PyTorch (about 1 GB), so it uses Vercel's
 large functions. On a cold start it loads PyTorch and downloads the CLIP image

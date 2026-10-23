@@ -224,7 +224,7 @@ The tests never use real services or spend any credits; fake versions of the AI 
 | Part | Address |
 | --- | --- |
 | Website | [snapbuy-ai.vercel.app](https://snapbuy-ai.vercel.app) |
-| Server | [snapbuy-ai-api.vercel.app](https://snapbuy-ai-api.vercel.app) |
+| Server | [vistora-api.vercel.app](https://vistora-api.vercel.app) |
 
 The secret keys are stored on Vercel as encrypted settings, not in the code.
 

@@ -61,7 +61,7 @@ app = FastAPI(
 # Local development is always allowed. In production, list the frontend's
 # address in ALLOWED_ORIGINS (comma-separated), and optionally allow Vercel
 # preview deployments with ALLOWED_ORIGIN_REGEX, for example
-#   https://snapbuy-ai(-[a-z0-9-]+)?\.vercel\.app
+#   https://(snapbuy-ai|vistora)(-[a-z0-9-]+)?\.vercel\.app
 LOCAL_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
 
 allowed_origins = LOCAL_ORIGINS + [

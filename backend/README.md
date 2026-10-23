@@ -4,8 +4,8 @@ FastAPI service behind [Vistora](https://github.com/itskunalkanaujiya/Vistora):
 upload a product photo and get matching listings from online stores in India,
 ranked by visual similarity, with prices and stock.
 
-Deployed on Vercel as the `snapbuy-ai-api` project (root directory
-`backend`), at https://snapbuy-ai-api.vercel.app. See the
+Deployed on Vercel as the `vistora-api` project (root directory
+`backend`), at https://vistora-api.vercel.app. See the
 [main README](https://github.com/itskunalkanaujiya/Vistora#readme) for the
 full project, API and local setup.
 
@@ -25,7 +25,7 @@ full project, API and local setup.
 |---|---|
 | `SERPAPI_API_KEY` | Required. SerpApi key for Google Lens (store as a secret) |
 | `ALLOWED_ORIGINS` | Frontend addresses allowed to call the API, comma-separated |
-| `ALLOWED_ORIGIN_REGEX` | Optional pattern for preview URLs, e.g. `https://snapbuy-ai(-[a-z0-9-]+)?\.vercel\.app` |
+| `ALLOWED_ORIGIN_REGEX` | Optional pattern for preview URLs, e.g. `https://(snapbuy-ai\|vistora)(-[a-z0-9-]+)?\.vercel\.app` |
 | `TRUST_PROXY_HEADERS` | `true` behind a hosting proxy, so search limits are per visitor |
 | `SEARCH_LIMIT` / `SEARCH_WINDOW_SECONDS` | Optional. Defaults: 10 searches per 600 s per visitor |
 | `CLIP_MODEL_NAME` | Optional. Defaults to `kunalkanaujiya/clip-vit-base-patch32-vision` |
