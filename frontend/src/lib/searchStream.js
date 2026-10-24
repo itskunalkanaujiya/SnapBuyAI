@@ -47,7 +47,7 @@ async function readEventStream(response, onEvent) {
  * Run a streamed image search. An optional query (brand, model, colour…)
  * narrows the Google Lens search for the same photo.
  */
-export async function streamSearch(file, onEvent, query) {
+export async function streamSearch(file, onEvent, query, signal) {
   const formData = new FormData();
   formData.append("file", file);
   if (query) formData.append("query", query);
@@ -55,6 +55,7 @@ export async function streamSearch(file, onEvent, query) {
   const response = await fetch(`${API_URL}/api/v1/products/search-by-image/stream`, {
     method: "POST",
     body: formData,
+    signal,
   });
 
   await readEventStream(response, onEvent);
@@ -95,11 +96,12 @@ export async function streamRating(file, onEvent, colours) {
 }
 
 /** Run a streamed search for a typed product description. */
-export async function streamTextSearch(query, onEvent) {
+export async function streamTextSearch(query, onEvent, signal) {
   const response = await fetch(`${API_URL}/api/v1/products/search-by-text/stream`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ query }),
+    signal,
   });
 
   await readEventStream(response, onEvent);

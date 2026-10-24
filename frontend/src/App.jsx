@@ -66,7 +66,7 @@ import {
 } from "./lib/products.js";
 
 const SAVED_KEY = "vistora-wishlist";
-const PROGRESS_FINISH_MS = 650;
+const PROGRESS_FINISH_MS = 250;
 
 function readSaved() {
   try {
@@ -154,6 +154,8 @@ export default function App() {
   const stageRef = useRef(STAGE.uploading);
   const stageStartedAtRef = useRef(0);
   const scrolledRef = useRef(false);
+  // The running photo/text search, so a newer one can cancel it.
+  const searchAbortRef = useRef(null);
   const [error, setError] = useState("");
 
   const [results, setResults] = useState(null);
@@ -554,6 +556,10 @@ export default function App() {
     scrolledRef.current = false;
     setIsSearching(true);
 
+    searchAbortRef.current?.abort();
+    const controller = new AbortController();
+    searchAbortRef.current = controller;
+
     let finalData = null;
 
     try {
@@ -582,7 +588,7 @@ export default function App() {
           default:
             break;
         }
-      }, query);
+      }, query, controller.signal);
 
       if (!finalData) {
         throw new Error("The search ended unexpectedly. Please try again.");
@@ -604,6 +610,8 @@ export default function App() {
       setResults(finalResults);
       rememberSearch(searchFile, finalResults);
     } catch (searchError) {
+      // A newer search cancelled this one; it owns the screen now.
+      if (controller.signal.aborted) return;
       // Keep any preview results, but stop showing them as "checking".
       setResults(clearPending);
       setError(
@@ -612,8 +620,10 @@ export default function App() {
           : searchError.message
       );
     } finally {
-      setIsSearching(false);
-      setIsComplete(false);
+      if (searchAbortRef.current === controller) {
+        setIsSearching(false);
+        setIsComplete(false);
+      }
     }
   }
 
@@ -861,6 +871,10 @@ export default function App() {
     scrolledRef.current = false;
     setIsSearching(true);
 
+    searchAbortRef.current?.abort();
+    const controller = new AbortController();
+    searchAbortRef.current = controller;
+
     let finalData = null;
 
     try {
@@ -869,7 +883,7 @@ export default function App() {
         if (event.type === "error") {
           throw new Error(event.detail || "Search failed. Please try again.");
         }
-      });
+      }, controller.signal);
 
       if (!finalData) {
         throw new Error("The search ended unexpectedly. Please try again.");
@@ -885,13 +899,15 @@ export default function App() {
       setResults(finalResults);
       rememberTextSearch(finalResults);
     } catch (searchError) {
+      // A newer search cancelled this one; it owns the screen now.
+      if (controller.signal.aborted) return;
       setError(
         searchError instanceof TypeError
           ? "Can't reach the Vistora server. Check that the backend is running."
           : searchError.message
       );
     } finally {
-      setIsSearching(false);
+      if (searchAbortRef.current === controller) setIsSearching(false);
     }
   }
 

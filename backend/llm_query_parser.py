@@ -105,6 +105,10 @@ def looks_like_sentence(query):
     return len(words) >= 3 and any(word in FILLER_WORDS for word in words)
 
 
+# Reused connections skip a TLS handshake on every model call.
+_session = requests.Session()
+
+
 def chat_json(messages, max_tokens=600, timeout=TIMEOUT_SECONDS, temperature=0, models=None):
     """
     Send a chat to the first available Groq model (of models, default
@@ -122,7 +126,7 @@ def chat_json(messages, max_tokens=600, timeout=TIMEOUT_SECONDS, temperature=0, 
         }
         if model.startswith("openai/gpt-oss"):
             body["reasoning_effort"] = "low"  # a reasoning model; keep it quick
-        response = requests.post(
+        response = _session.post(
             GROQ_URL,
             headers={"Authorization": f"Bearer {os.environ['GROQ_API_KEY']}"},
             json=body,

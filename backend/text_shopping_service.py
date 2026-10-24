@@ -218,13 +218,17 @@ def title_key(title):
     return " ".join(re.findall(r"[a-z0-9]+", title))
 
 
+# Reused connections skip a TLS handshake on every search.
+_session = requests.Session()
+
+
 def run_google_shopping(query: str) -> list[dict]:
     """Search Google Shopping in India and return the raw shopping results."""
     api_key = os.getenv("SERPAPI_API_KEY")
     if not api_key:
         raise RuntimeError("SERPAPI_API_KEY is missing from backend/.env")
 
-    response = requests.get(
+    response = _session.get(
         SERPAPI_URL,
         params={
             "engine": "google_shopping",
@@ -233,7 +237,7 @@ def run_google_shopping(query: str) -> list[dict]:
             "hl": "en",
             "api_key": api_key,
         },
-        timeout=60,
+        timeout=20,
     )
     response.raise_for_status()
     data = response.json()
@@ -262,11 +266,11 @@ def run_serper_shopping(query: str) -> list[dict]:
     if not api_key:
         raise RuntimeError("SERPER_API_KEY is missing from backend/.env")
 
-    response = requests.post(
+    response = _session.post(
         SERPER_SHOPPING_URL,
         headers={"X-API-KEY": api_key, "Content-Type": "application/json"},
         json={"q": query, "gl": "in", "hl": "en", "num": SERPER_RESULTS},
-        timeout=30,
+        timeout=8,
     )
     if response.status_code != 200:
         raise RuntimeError(f"Serper returned {response.status_code}: {response.text[:200]}")

@@ -147,8 +147,10 @@ def test_photo_search_shows_lens_order_first_then_ranked(monkeypatch, tmp_path):
         for name, price in (("a", 900), ("b", 800), ("c", 700))
     ]
     monkeypatch.setattr(s, "run_google_lens", lambda path, query=None: [dict(c) for c in candidates])
-    monkeypatch.setattr(s, "download_thumbnails", lambda items: [None] * len(items))
-    monkeypatch.setattr(s, "compute_visual_similarity_scores", lambda path, items, thumbs: {0: 0.5, 1: 0.9, 2: 0.7})
+    monkeypatch.setattr(
+        s, "download_and_score",
+        lambda path, items, on_downloaded=None: ([None] * len(items), {0: 0.5, 1: 0.9, 2: 0.7}),
+    )
     monkeypatch.setattr(s, "start_page_details", lambda items, deadline=None: None)
     monkeypatch.setattr(s, "finish_page_details", lambda job: None)
 
@@ -172,13 +174,59 @@ def test_foreign_listings_dont_crowd_out_indian_ones(monkeypatch, tmp_path):
          "price": {"value": "₹799", "extracted_value": 799, "currency": "₹"}, "in_stock": True},
     ]
     monkeypatch.setattr(s, "run_google_lens", lambda path, query=None: foreign + indian)
-    monkeypatch.setattr(s, "download_thumbnails", lambda items: [None] * len(items))
-    monkeypatch.setattr(s, "compute_visual_similarity_scores", lambda path, items, thumbs: {})
+    monkeypatch.setattr(
+        s, "download_and_score", lambda path, items, on_downloaded=None: ([None] * len(items), {})
+    )
     monkeypatch.setattr(s, "start_page_details", lambda items, deadline=None: None)
     monkeypatch.setattr(s, "finish_page_details", lambda job: None)
 
     result = s.search_products_by_image(tmp_path / "photo.jpg")
     assert [p["name"] for p in result["best_matches"]] == ["Cotton Shirt"]
+
+
+def test_download_and_score_scores_thumbnails_in_groups(monkeypatch):
+    torch = pytest.importorskip("torch")
+    from PIL import Image
+
+    monkeypatch.setattr(s, "load_clip_model", lambda: (object(), object()))
+    monkeypatch.setattr(s, "download_thumbnail", lambda url: Image.new("RGB", (4, 4)) if url else None)
+
+    batches = []
+
+    def fake_encode(model, processor, images):
+        batches.append(len(images))
+        # The photo's row is [1, 0]; each thumbnail is a unit vector at an angle.
+        if len(images) == 1:
+            return torch.tensor([[1.0, 0.0]])
+        return torch.tensor([[0.6, 0.8]] * len(images))
+
+    monkeypatch.setattr(s, "encode_images", fake_encode)
+
+    candidates = [{"thumbnail": f"https://img.example/{i}.jpg"} for i in range(11)]
+    candidates.append({"thumbnail": None})
+    downloaded = []
+
+    thumbnails, scores = s.download_and_score(
+        Image.new("RGB", (4, 4)), candidates, on_downloaded=lambda: downloaded.append(True)
+    )
+
+    assert downloaded == [True]
+    assert sorted(scores) == list(range(11))  # the candidate without a thumbnail is unscored
+    assert all(score == 0.6 for score in scores.values())
+    assert thumbnails[11] is None and thumbnails[0] is not None
+    assert batches[0] == 1 and sum(batches[1:]) == 11  # photo first, then thumbnails in groups
+
+
+def test_download_and_score_without_clip_just_downloads(monkeypatch):
+    monkeypatch.setattr(s, "load_clip_model", lambda: (None, None))
+    monkeypatch.setattr(s, "download_thumbnails", lambda items, deadline=None: ["img"] * len(items))
+    called = []
+
+    thumbnails, scores = s.download_and_score(
+        "photo.jpg", [{"thumbnail": "x"}, {"thumbnail": "y"}], on_downloaded=lambda: called.append(1)
+    )
+
+    assert thumbnails == ["img", "img"] and scores == {} and called == [1]
 
 
 

@@ -384,10 +384,12 @@ _search_cache_lock = threading.Lock()
 
 
 def image_fingerprint(image: Image.Image) -> str:
-    """Hash the decoded pixels, so re-saved copies of a photo still match."""
+    """Hash a small copy of the pixels, so re-saved copies of a photo still match."""
+    # Hashing a downscaled copy is far cheaper than a multi-megapixel buffer.
+    small = image.resize((96, 96), Image.BILINEAR, reducing_gap=2.0)
     digest = hashlib.sha256()
     digest.update(f"{image.width}x{image.height}".encode())
-    digest.update(image.tobytes())
+    digest.update(small.tobytes())
     return digest.hexdigest()
 
 
@@ -729,7 +731,7 @@ def text_query_or_400(body: TextSearchRequest) -> str:
 
 
 def text_cache_key(query: str) -> str:
-    return f"text:{query.lower()}"
+    return f"text:{' '.join(query.lower().split())}"
 
 
 @app.post("/api/v1/products/search-by-text")

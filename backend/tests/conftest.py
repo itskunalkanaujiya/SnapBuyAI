@@ -3,12 +3,16 @@ import sys
 from pathlib import Path
 
 import pytest
+import requests
 from PIL import Image
 
 # Make the backend modules importable from the tests folder.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import image_shopping_service  # noqa: E402
+import llm_query_parser  # noqa: E402
 import main  # noqa: E402
+import text_shopping_service  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -28,6 +32,30 @@ def reset_server_state():
     main._tryon_log.clear()
     main._overlay_log.clear()
     main._overlay_cache.clear()
+
+
+class _RequestsShim:
+    """Stands in for a requests.Session in tests: calls whatever requests.get,
+    .post or .put is at call time, so tests can keep mocking those."""
+
+    def get(self, *args, **kwargs):
+        return requests.get(*args, **kwargs)
+
+    def post(self, *args, **kwargs):
+        return requests.post(*args, **kwargs)
+
+    def put(self, *args, **kwargs):
+        return requests.put(*args, **kwargs)
+
+
+@pytest.fixture(autouse=True)
+def mockable_http_sessions(monkeypatch):
+    """The services reuse connections through module-level sessions; tests
+    mock requests.* instead, so route the sessions through it."""
+    shim = _RequestsShim()
+    monkeypatch.setattr(image_shopping_service, "_api_session", shim)
+    monkeypatch.setattr(llm_query_parser, "_session", shim)
+    monkeypatch.setattr(text_shopping_service, "_session", shim)
 
 
 @pytest.fixture(autouse=True)

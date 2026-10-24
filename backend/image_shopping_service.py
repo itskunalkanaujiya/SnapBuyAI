@@ -5,7 +5,7 @@ import os
 import re
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor, wait
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
@@ -77,7 +77,7 @@ PAGE_FETCH_WORKERS = 16
 
 # Seller pages still loading this many seconds after the Google Lens results
 # arrive are skipped, however late they started.
-PAGE_FETCH_DEADLINE = 6.5
+PAGE_FETCH_DEADLINE = 5.0
 
 THUMBNAIL_TIMEOUT = 5
 THUMBNAIL_WORKERS = 16
@@ -674,6 +674,116 @@ def download_thumbnails(candidates, deadline=THUMBNAIL_DEADLINE):
     ]
 
 
+def encode_images(model, processor, images):
+    """Unit-length CLIP features, one row per image."""
+    inputs = processor(images=images, return_tensors="pt")
+
+    with torch.no_grad():
+        # get_image_features returns an output object in newer
+        # transformers versions, so project the pooled output directly.
+        outputs = model.vision_model(pixel_values=inputs["pixel_values"])
+        features = model.visual_projection(outputs.pooler_output)
+        return features / features.norm(p=2, dim=-1, keepdim=True).clamp(min=1e-12)
+
+
+# Thumbnails are scored in groups of this size as they arrive.
+CLIP_BATCH = 8
+
+
+def open_query_image(image_path):
+    if isinstance(image_path, Image.Image):
+        return image_path.convert("RGB")
+
+    with Image.open(image_path) as image:
+        query_image = image.convert("RGB")
+        query_image.load()
+        return query_image
+
+
+def download_and_score(image_path, candidates, deadline=THUMBNAIL_DEADLINE, on_downloaded=None):
+    """
+    Download every candidate's thumbnail and score it against the photo with
+    CLIP, scoring groups of thumbnails while the rest are still downloading
+    instead of waiting for all of them first.
+
+    Returns (thumbnails, scores): thumbnails aligned with candidates (None
+    where a download failed or missed the deadline) and CLIP similarities by
+    candidate index (empty when CLIP is unavailable). on_downloaded() is
+    called once the downloads are over, before the last group is scored.
+    """
+    model, processor = load_clip_model()
+    query_image = None
+
+    if model is not None and processor is not None and Image is not None and torch is not None:
+        try:
+            query_image = open_query_image(image_path)
+        except Exception as exc:
+            print(f"Could not open uploaded image for CLIP: {exc}")
+
+    if query_image is None:
+        thumbnails = download_thumbnails(candidates, deadline)
+        if on_downloaded:
+            on_downloaded()
+        return thumbnails, {}
+
+    thumbnails = [None] * len(candidates)
+    scores = {}
+    waiting = []  # (index, image) downloaded but not yet scored
+    query_features = None
+
+    def score_waiting():
+        if not waiting or query_features is None:
+            return
+        features = encode_images(model, processor, [image for _, image in waiting])
+        with torch.no_grad():
+            similarities = torch.matmul(features, query_features).tolist()
+        for (index, _), score in zip(waiting, similarities):
+            scores[index] = round(float(score), 4)
+        waiting.clear()
+
+    stop = time.monotonic() + deadline
+    pool = ThreadPoolExecutor(max_workers=THUMBNAIL_WORKERS)
+    futures = {
+        pool.submit(download_thumbnail, item.get("thumbnail")): index
+        for index, item in enumerate(candidates)
+    }
+    pending = set(futures)
+
+    try:
+        # The photo's own features are ready before the first thumbnail.
+        query_features = encode_images(model, processor, [query_image])[0]
+
+        while pending:
+            remaining = stop - time.monotonic()
+            if remaining <= 0:
+                break
+            done, pending = wait(pending, timeout=remaining, return_when=FIRST_COMPLETED)
+            for future in done:
+                image = future.result()
+                if image is not None:
+                    thumbnails[futures[future]] = image
+                    waiting.append((futures[future], image))
+            if len(waiting) >= CLIP_BATCH:
+                score_waiting()
+    except Exception as exc:
+        print(f"CLIP scoring failed; using text ranking: {exc}")
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
+
+    if pending:
+        print(f"Skipped {len(pending)} slow thumbnail(s).")
+
+    if on_downloaded:
+        on_downloaded()
+
+    try:
+        score_waiting()
+    except Exception as exc:
+        print(f"CLIP scoring failed; using text ranking: {exc}")
+
+    return thumbnails, scores
+
+
 def compute_visual_similarity_scores(image_path, candidates, thumbnails=None):
     """
     Return CLIP cosine similarities, not probabilities.
@@ -716,17 +826,9 @@ def compute_visual_similarity_scores(image_path, candidates, thumbnails=None):
         return {}
 
     try:
-        inputs = processor(images=images, return_tensors="pt")
+        features = encode_images(model, processor, images)
 
         with torch.no_grad():
-            # get_image_features returns an output object in newer
-            # transformers versions, so project the pooled output directly.
-            outputs = model.vision_model(pixel_values=inputs["pixel_values"])
-            features = model.visual_projection(outputs.pooler_output)
-            features = features / features.norm(p=2, dim=-1, keepdim=True).clamp(
-                min=1e-12
-            )
-
             similarities = torch.matmul(features[1:], features[0])
 
         return {
@@ -1458,6 +1560,10 @@ BLOB_API_URL = "https://blob.vercel-storage.com"
 BLOB_API_VERSION = "11"
 
 
+# Reused connections skip a TLS handshake on every Blob / Lens call.
+_api_session = requests.Session()
+
+
 def fast_lens_available():
     return bool(os.getenv("SEARCHAPI_API_KEY") and os.getenv("BLOB_READ_WRITE_TOKEN"))
 
@@ -1472,7 +1578,7 @@ def _blob_headers():
 def upload_temporary_image(image_path, mime_type):
     """Put the photo on Vercel Blob and return its public URL."""
     extension = {"image/png": "png", "image/webp": "webp"}.get(mime_type, "jpg")
-    response = requests.put(
+    response = _api_session.put(
         f"{BLOB_API_URL}/?pathname=lens/photo.{extension}",
         data=Path(image_path).read_bytes(),
         headers={
@@ -1523,7 +1629,7 @@ def run_searchapi_lens(image_path, mime_type, query=None):
         }
         if query:
             params["q"] = query
-        response = requests.get(SEARCHAPI_URL, params=params, timeout=45)
+        response = _api_session.get(SEARCHAPI_URL, params=params, timeout=25)
         data = response.json()
         if response.status_code != 200 or data.get("error"):
             raise RuntimeError(f"{response.status_code}: {str(data.get('error') or data)[:200]}")
@@ -1671,7 +1777,7 @@ def fetch_visual_matches(api_key, image_id, no_cache=False, query=None):
     if no_cache:
         params["no_cache"] = "true"
 
-    search_response = requests.get(SERPAPI_URL, params=params, timeout=60)
+    search_response = _api_session.get(SERPAPI_URL, params=params, timeout=40)
     search_response.raise_for_status()
     data = search_response.json()
 
@@ -1787,17 +1893,22 @@ def search_products_by_image(
             },
         )
 
-    # Download thumbnails first: seller-page fetching competes for the CPU
-    # and would slow these downloads enough to miss some.
-    thumbnails = download_thumbnails(candidates)
-    thumbnails_done = time.monotonic()
+    # CLIP reorders the larger pool by visual similarity, scoring thumbnails
+    # as they download. Seller-page fetching waits until the downloads are
+    # over: it competes for the CPU and would slow them enough to miss some,
+    # then loads in the background while the last group is scored.
+    page_jobs = []
 
-    # Seller pages then load in the background while CLIP runs.
-    page_job = start_page_details(candidates, deadline=lens_done + PAGE_FETCH_DEADLINE)
+    def start_pages():
+        page_jobs.append(
+            start_page_details(candidates, deadline=lens_done + PAGE_FETCH_DEADLINE)
+        )
 
-    # CLIP reorders the larger pool by visual similarity.
-    similarity_scores = compute_visual_similarity_scores(
-        image_path, candidates, thumbnails
+    thumbnails, similarity_scores = download_and_score(
+        image_path, candidates, on_downloaded=start_pages
+    )
+    page_job = page_jobs[0] if page_jobs else start_page_details(
+        candidates, deadline=lens_done + PAGE_FETCH_DEADLINE
     )
     clip_done = time.monotonic()
 
@@ -1840,8 +1951,7 @@ def search_products_by_image(
 
     print(
         f"Search timings: lens {lens_done - started:.1f}s, "
-        f"thumbnails {thumbnails_done - lens_done:.1f}s, "
-        f"clip {clip_done - thumbnails_done:.1f}s, "
+        f"thumbnails+clip {clip_done - lens_done:.1f}s, "
         f"pages +{pages_done - clip_done:.1f}s, "
         f"total {pages_done - started:.1f}s "
         f"({len(candidates)} candidates)"
